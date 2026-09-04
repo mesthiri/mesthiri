@@ -85,7 +85,14 @@
             (if (not h)
                 (make-decision 'no-handler stage
                                "no handler registered for this stage" cmd)
-                (begin ((cdr h) forge config event)
+                ;; The command reaches the handler. Review needs it: an
+                ;; explicit /review on a pull request mesthiri did not author
+                ;; is the only thing that authorizes reviewing it, and
+                ;; without this the handler could not tell a command from a
+                ;; trigger — it read a module-level box nothing ever set, so
+                ;; every /review on a foreign pull request was skipped in
+                ;; silence.
+                (begin ((cdr h) forge config event cmd)
                        (make-decision 'ran stage #f cmd))))))
 
     (define (dispatch-command forge config event cmd handlers already-handled?)

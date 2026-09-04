@@ -308,7 +308,7 @@
                 (string-append " — stderr: " tail)
                 " — nothing on stderr; check the provider and model names")))))
 
-(define (prioritize-handler forge config event)
+(define (prioritize-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (mode (stage-mode (config-stage config 'prioritize)))
          (promoted (prioritize! forge config repo mode)))
@@ -316,12 +316,12 @@
 
 ;; The code stage. The gates run in cost order and the agent is the last
 ;; thing reached: an ineligible issue costs no clone and no tokens.
-(define (code-handler forge config event)
+(define (code-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (st (config-stage config 'code))
          (mode (stage-mode st))
          (number (event-number event))
-         (by-command? (and (decision-command-name) #t))
+         (by-command? (and cmd #t))
          (issue (forge-get forge (string-append "/repos/" repo "/issues/"
                                                 (number->string number))))
          (tier (issue-tier forge repo number)))
@@ -363,8 +363,6 @@
                             (else (loop (+ i 1)))))))
 
 ;; Set by dispatch so the stage knows whether a human asked by name.
-(define current-command (list #f))
-(define (decision-command-name) (car current-command))
 
 ;; The stage proper. Note the order: clone, agent, THEN the diff check and
 ;; only then the push. The agent never holds the token and never pushes.
@@ -456,13 +454,13 @@
 ;; An explicit /review on a foreign pull request fetches the diff through the
 ;; API into a read-only clone the agent cannot push from — the same sandbox
 ;; minus any write path.
-(define (review-handler forge config event)
+(define (review-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (number (event-number event))
          (mode (stage-mode (config-stage config 'review)))
          (pr (forge-get forge (string-append "/repos/" repo "/pulls/"
                                              (number->string number))))
-         (by-command? (and (decision-command-name) #t)))
+         (by-command? (and cmd #t)))
     (cond
      ((eq? mode 'off) (log-info "review stage is off"))
      ((and (not (mesthiri-authored? pr)) (not by-command?))
@@ -474,7 +472,13 @@
              (model (harness-model hn))
              (workdir (or (env "RUNNER_TEMP") "/tmp"))
              (diff (forge-request-diff forge repo number))
-             (run (agent-runner config hn pname model workdir #f event)))
+             ;; Review left no trace where every other stage writes one, so
+             ;; its reasoning was unauditable and retro could not read it —
+             ;; and "no findings" was indistinguishable from "did not run".
+             (trace (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                   "/mesthiri-trace-review-"
+                                   (number->string number) ".jsonl"))
+             (run (agent-runner config hn pname model workdir trace event)))
         (for-each
          (lambda (dim)
            (guard (e (#t (log-warn "review pass " dim " failed; continuing")))
@@ -510,7 +514,7 @@
 ;; uploaded — and files proposals on this repository. It never acts on them:
 ;; mesthiri is not installed on its own repository, so a proposal about
 ;; mesthiri reaches it through a human who read one.
-(define (retro-handler forge config event)
+(define (retro-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (mode (stage-mode (config-stage config 'retro)))
          (runs (recent-runs forge repo))
@@ -561,7 +565,7 @@
               (else (loop (cdr stages)))))
       "unknown"))
 
-(define (triage-handler forge config event)
+(define (triage-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (st (config-stage config 'triage))
          (mode (stage-mode st))

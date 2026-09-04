@@ -9,6 +9,27 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.12] — 2026-09-04
+
+### Fixed
+
+- **A handler is told which command ran it.** It read a module-level box
+  that nothing ever set, so the answer was always "none". Review uses that
+  to tell an explicit `/review` from a trigger, and an explicit `/review` is
+  the only thing authorizing review of a pull request mesthiri did not
+  author — so every such request was skipped in silence, saying "not a
+  mesthiri pull request and no /review" to someone who had just typed
+  `/review`.
+- **Review writes a trace**, where every other stage already did. Without
+  one its reasoning was unauditable, retro could not read it, and "no
+  findings" was indistinguishable from "did not run".
+
+### Added
+
+- The reusable workflow takes `model-secrets`, so a repository can fund more
+  than one provider — see 0.1.11's note; the two changes together are what
+  let review run on a different provider from code.
+
 ## [0.1.11] — 2026-09-04
 
 ### Fixed

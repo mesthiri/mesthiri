@@ -38,9 +38,17 @@
    "test"))
 
 (define ran '())
+;; Handlers take the matched command as a fourth argument — review needs it
+;; to tell an explicit /review from a trigger, and reads it here so the
+;; arity stays honest rather than variadic.
+(define seen-cmd 'unset)
 (define handlers
-  (list (cons 'triage (lambda (fo c e) (set! ran (cons 'triage ran))))
-        (cons 'code   (lambda (fo c e) (set! ran (cons 'code ran))))))
+  (list (cons 'triage (lambda (fo c e cmd)
+                        (set! seen-cmd cmd)
+                        (set! ran (cons 'triage ran))))
+        (cons 'code   (lambda (fo c e cmd)
+                        (set! seen-cmd cmd)
+                        (set! ran (cons 'code ran))))))
 (define (never-handled e s) #f)
 (define (always-handled e s) #t)
 
@@ -148,6 +156,24 @@
                                              handlers never-handled)))
 (check "and stage-candidates reports it as invalid"
        'invalid (car (cadddr (car (stage-candidates bad-cfg (ev 'issue-opened "alice"))))))
+
+;; --- the handler is told which command ran it -----------------------------
+;;
+;; It used to read a module-level box that nothing ever set, so it was always
+;; #f. Review uses this to tell an explicit /review from a trigger, and an
+;; explicit /review is the only thing that authorizes reviewing a pull
+;; request mesthiri did not author — so every such request was skipped in
+;; silence.
+(set! ran '())
+(set! seen-cmd 'unset)
+(define _d1 (dispatch f cfg (ev 'issue-comment "alice" '() "/implement") handlers never-handled))
+(check "a command dispatch tells the handler which command"
+       "implement" (and seen-cmd (symbol->string (command-name seen-cmd))))
+
+(set! ran '())
+(set! seen-cmd 'unset)
+(define _d2 (dispatch f cfg (ev 'issue-opened "alice" '()) handlers never-handled))
+(check "a trigger dispatch passes no command" #f seen-cmd)
 
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
