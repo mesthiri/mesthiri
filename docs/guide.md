@@ -58,7 +58,8 @@ mesthiri try — read-only, nothing will be written
 
 - A repository with GitHub Actions enabled.
 - Permission to register GitHub Apps in your account or organization.
-- An API key for whichever model backend you use, as a repository secret.
+- An API key for whichever model backend you use, as a repository secret,
+  and the endpoint it belongs to.
   This is the one credential that goes *into* the agent's sandbox, because
   the agent cannot work without it. It buys model tokens and nothing else —
   it grants no access to your repository.
@@ -181,7 +182,15 @@ code and a fork carries a copy. It is s-expressions, read as data.
   ;; asserting where a contribution came from, so it names you, not a bot.
   (operator "Your Name" "you@example.org")
 
+  ;; Which agent program mesthiri drives. Not the model — see below.
   (agent (backend pi) (version "0.9.2"))
+
+  ;; Where models come from. The sandbox's network allowlist is derived
+  ;; from `endpoint`, so there is nothing to keep in sync by hand.
+  (providers
+    (main (endpoint "https://api.anthropic.com")
+          (secret   MESTHIRI_MODEL_KEY)     ; the Actions secret
+          (key-env  ANTHROPIC_API_KEY)))    ; what the agent reads it from
 
   ;; Your rubric, in your repository. mesthiri does not bring one.
   (rubric "docs/dev/github-issues.md")
@@ -217,6 +226,48 @@ code and a fork carries a copy. It is s-expressions, read as data.
 The expressions after `on` are predicates over the event, drawn from a
 fixed vocabulary. They are interpreted, not evaluated — a config file
 cannot become a program.
+
+## Choosing models
+
+Which model a stage uses is a property of the stage, not of the repository,
+so it lives in that role's harness file. Triage reads issues and applies a
+rubric; review argues with a diff. They do not need the same model, and
+paying for the stronger one everywhere is the most common way to make this
+expensive for no benefit.
+
+```scheme
+;; .mesthiri/harness/triage.scm
+(harness
+  (provider main)
+  (model "claude-haiku-4-5-20251001")
+  (effort low)
+  (budgets (tokens 60000) (turns 12))
+  (tools read grep)
+  (prompt "..."))
+```
+
+```scheme
+;; .mesthiri/harness/review.scm
+(harness
+  (provider main)
+  (model "claude-opus-5")
+  (effort high)
+  (budgets (tokens 250000) (turns 30))
+  (tools read grep test)
+  (prompt "..."))
+```
+
+Name an exact model. A floating alias will be rejected rather than
+resolved, and the reason is worth understanding: an alias that moves under
+you changes every verdict and every review afterwards, with nothing in your
+repository recording that anything changed. The model that produced a
+result is written into the run record and into the `Generated-by` trailer of
+any commit, so that six months from now a strange-looking pull request can
+be traced to what actually wrote it.
+
+If you use a gateway or a self-hosted endpoint, point `endpoint` at it. The
+sandbox allowlist follows from that value, so there is no second place to
+update and no way for the two to disagree.
 
 ## Your first triage
 
@@ -289,7 +340,8 @@ Closes #412
 
 Signed-off-by: Your Name <you@example.org>
 Co-authored-by: mesthiri[bot] <...@users.noreply.github.com>
-Generated-by: mesthiri 0.1.0; agent pi 0.9.2; run .../actions/runs/1
+Generated-by: mesthiri 0.1.0; agent pi 0.9.2;
+             model main/claude-opus-5; run .../actions/runs/1
 ```
 
 The sign-off names **you**, and this is deliberate rather than a

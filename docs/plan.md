@@ -128,8 +128,14 @@ with no server.
       already looks exhausted. This is the only place that approximation
       exists, so it lives with the budgets rather than being assumed by
       every stage.
-- [ ] `.mesthiri/harness/<role>.scm` — prompt, allowed tools, model and
-      effort, budgets and sandbox policy as one reviewable file per role.
+- [ ] `.mesthiri/harness/<role>.scm` — prompt, allowed tools, provider and
+      pinned model, effort, budgets and sandbox policy as one reviewable
+      file per role. A floating model alias is rejected at load, not
+      resolved.
+- [ ] The sandbox egress allowlist is **derived** from the configured
+      provider endpoint, never hand-written alongside it — a mismatch
+      between the two surfaces as a connection failure inside an agent run,
+      which looks like anything but the typo it is.
 - [ ] Prompt hygiene: issue and PR text enters prompts only inside an
       explicit untrusted-data block, and never argv.
 - [ ] A JSONL trace per run, uploaded as a CI artifact — the input M8's
@@ -200,7 +206,8 @@ issues into an ordered `ready-to-implement` set, with a reason on each.
       pushes and opens the PR.
 - [ ] PR mechanics: author and `Signed-off-by` both the configured operator
       (checkers compare the two), `Co-authored-by: mesthiri[bot]`, a
-      `Generated-by` trailer naming backend, version and run URL, PR body
+      `Generated-by` trailer naming backend, version, provider/model and
+      run URL, PR body
       saying in prose that the change is machine-generated. One issue, one
       PR; **never merge**. A test asserts a produced commit passes a DCO
       check the way the org's app applies it.

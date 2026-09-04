@@ -152,9 +152,48 @@ maintainer who expected YAML.
   targets: mesthiri is installed on a repository and acts on that
   repository.
 - `.mesthiri/harness/<role>.scm` — one file per agent role: system prompt,
-  allowed tools, model and effort, budgets, sandbox policy. A role is
-  configured in one reviewable file rather than scattered across workflow
-  YAML, which is fullsend's harness idea (their ADR 0024).
+  allowed tools, which provider and model, effort, budgets, sandbox policy.
+  A role is configured in one reviewable file rather than scattered across
+  workflow YAML, which is fullsend's harness idea (their ADR 0024).
+
+### Providers, models and the endpoint
+
+`(agent (backend pi) …)` names the *harness program* mesthiri drives, not
+the model it drives it with. Those are separate choices and are configured
+separately.
+
+Providers are named once in `config.scm`; roles reference one by name:
+
+```scheme
+(providers
+  (main (endpoint "https://api.anthropic.com")
+        (secret   MESTHIRI_MODEL_KEY)     ; the Actions secret holding it
+        (key-env  ANTHROPIC_API_KEY)))    ; the name the agent reads it from
+```
+
+`secret` and `key-env` are separate because they answer different
+questions — what GitHub calls the secret, and what the backend expects to
+find in its environment. Collapsing them would tie mesthiri's secret naming
+to one vendor's convention. Naming providers rather than assuming one also
+leaves room for a role to use a different vendor later, which is the shape
+adversarial review would want, without a redesign to get there.
+
+Two properties matter more than the syntax:
+
+**The sandbox's egress allowlist is derived from the provider endpoint, not
+written by hand.** An allowlist that disagrees with the endpoint the agent
+actually calls produces a connection failure deep inside an agent run, which
+looks like anything except the configuration typo it is. Deriving it deletes
+that failure mode. The only egress entries an operator writes are the
+package registries their own test command needs.
+
+**Models are pinned, not aliased.** A harness names an exact model, and a
+floating alias is rejected: an alias that silently moves changes every
+verdict and every review afterwards, with nothing in the repository
+recording that anything changed. This is the same failure as rubric drift,
+which mesthiri already guards against by recording the rubric's commit SHA —
+so the model name goes into the run record and the `Generated-by` trailer
+for the same reason.
 
 **Trigger expressions** decide which stage an event runs. They are
 predicates over the normalized event, written in a small s-expression
@@ -327,7 +366,8 @@ trailers, and the shape is not arbitrary:
 ```
 Signed-off-by: Operator Name <operator@example.org>
 Co-authored-by: mesthiri[bot] <…+mesthiri[bot]@users.noreply.github.com>
-Generated-by: mesthiri <version>; agent <backend> <version>; run <run-url>
+Generated-by: mesthiri <version>; agent <backend> <version>;
+             model <provider>/<model>; run <run-url>
 ```
 
 The commit **author** is the operator too, because DCO checkers compare
