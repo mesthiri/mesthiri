@@ -61,6 +61,27 @@ jobs:
           npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
           pi --version
 
+      # TEMPORARY probe: what does bwrap actually do on this image?
+      - name: Probe bwrap
+        run: |
+          set -x
+          cat /etc/os-release | head -2
+          which bwrap || sudo apt-get install -y -q bubblewrap
+          bwrap --version
+          sysctl kernel.unprivileged_userns_clone 2>&1 || true
+          sysctl kernel.apparmor_restrict_unprivileged_userns 2>&1 || true
+          mkdir -p /tmp/wd /tmp/sec
+          bwrap --unshare-all --share-net --die-with-parent --new-session \
+                --ro-bind / / --bind /tmp/wd /tmp/wd --tmpfs /tmp/sec \
+                --proc /proc --dev /dev --chdir /tmp/wd -- /bin/echo CONTAINED
+          echo "trivial-exit=$?"
+          echo secret > /tmp/sec-real.txt
+          bwrap --unshare-all --share-net --die-with-parent --new-session \
+                --ro-bind / / --bind /tmp/wd /tmp/wd --tmpfs /tmp/sec \
+                --proc /proc --dev /dev --chdir /tmp/wd -- /bin/cat /tmp/sec-real.txt \
+            && echo "LEAK: read a host file" || echo "ok: blocked or absent"
+        continue-on-error: true
+
       - run: ./tests/run-all.sh
         env:
           MESTHIRI_LIBS: ../kaappi-json/lib
