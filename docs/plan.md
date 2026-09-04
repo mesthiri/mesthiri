@@ -127,9 +127,9 @@ it belongs with dispatch in M2, where there is a real event to explain.
 
 The heart of the re-architecture. Until this works, nothing else can.
 
-- [ ] `mesthiri dispatch` — normalize, authorize, match a trigger, run one
+- [x] `mesthiri dispatch` — normalize, authorize, match a trigger, run one
       stage. One event, one stage, one job.
-- [ ] The shim workflow, in `templates/`: native triggers plus a single
+- [x] The shim workflow, in `templates/`: native triggers plus a single
       hourly `schedule` tick — dispatch matches the tick against each
       stage's configured schedule, a whole-hour UTC time optionally
       qualified by a weekday — calling the reusable
@@ -138,9 +138,9 @@ The heart of the re-architecture. Until this works, nothing else can.
       a test asserts the template contains no such checkout, because the
       failure mode is handing credentials to anyone who opens a pull
       request.
-- [ ] The reusable workflow, in `.github/workflows/`: download the pinned
+- [x] The reusable workflow, in `.github/workflows/`: download the pinned
       mesthiri release, **verify its checksum**, run it.
-- [ ] Commands: `/triage`, `/implement`, `/review`, `/fix`, `/retro` parsed
+- [x] Commands: `/triage`, `/implement`, `/review`, `/fix`, `/retro` parsed
       by a plain grammar, authorized against the commenter's permission,
       restricted to the entity holding their inputs, refused with an
       explanatory comment when unauthorized. A label a human applies that
@@ -148,17 +148,24 @@ The heart of the re-architecture. Until this works, nothing else can.
       permission — write for the code and fix stages — while labels
       mesthiri's own Apps apply pass. Tests include a command-shaped
       string inside an issue body that must not execute.
-- [ ] Idempotency: a handler checks whether it already acted on this event
+- [x] Idempotency: a handler checks whether it already acted on this event
       id before acting; a CI concurrency group collapses rapid edits.
-- [ ] `mesthiri explain-event` — print the normalized event and which
+- [x] `mesthiri explain-event` — print the normalized event and which
       trigger predicates were tested and how they matched. "A stage did
       nothing and said nothing" is the failure mode this architecture makes
       easiest to hit, and it is unhelpful without this.
 
-**Demo:** `/ping` (a demo-only probe, not a shipped command) from an
-authorized account on `mesthiri/sandbox` gets a reply comment; from an
-unauthorized account, a refusal. End to end, in CI,
-with no server.
+**Demo:** `/triage` from an authorized account on `mesthiri/sandbox` gets a
+reply comment from the M2 probe handler; from an account without triage
+permission, a refusal naming what was needed. End to end, in CI, with no
+server. **Blocked on M0**: needs `mesthiri/sandbox` to exist and the Apps
+registered.
+
+The probe replaced the planned `/ping`. A demo-only command would have had
+to bypass the command table, the entity check and the permission rule — so
+it would have demonstrated a path that does not ship. Registering a
+placeholder handler for the real `triage` stage exercises every gate
+instead, and M4 replaces the handler rather than deleting a special case.
 
 ## M3 — Agent execution and containment
 

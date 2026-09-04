@@ -1,0 +1,50 @@
+# mesthiri — installed shim workflow
+#
+# This file is deliberately tiny and should almost never change: it forwards
+# events to a reusable workflow that mesthiri maintains, so fixes reach you
+# without a pull request to this repository.
+#
+# SECURITY — the two rules this file exists to hold:
+#
+#   1. Pull-request events use `pull_request_target`, not `pull_request`. A
+#      `pull_request` workflow runs the copy of itself from the PR's own
+#      branch, so anyone opening a pull request could rewrite it and read the
+#      secrets it holds. `pull_request_target` runs this file as it exists on
+#      the base branch — the version you reviewed.
+#
+#   2. Because `pull_request_target` carries real secrets, this workflow
+#      NEVER checks out the pull request's code, and in fact contains no
+#      checkout at all. Adding one is how the secrets above end up in a
+#      contributor's hands. mesthiri's own test suite asserts this file has
+#      no checkout step.
+#
+# Schedules live in .mesthiri/config.scm, not here. This is a single hourly
+# tick; mesthiri matches it against each stage's configured time. Changing
+# when a stage runs is a config edit, and this file stays as it is.
+
+name: mesthiri
+
+on:
+  issues:
+    types: [opened, reopened, labeled]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  schedule:
+    - cron: '7 * * * *'      # hourly; the minute is arbitrary and staggered
+
+# Collapse rapid edits to the same issue or pull request into one run.
+concurrency:
+  group: mesthiri-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
+    secrets:
+      reader-key: ${{ secrets.MESTHIRI_READER_KEY }}
+      writer-key: ${{ secrets.MESTHIRI_WRITER_KEY }}
+      model-key: ${{ secrets.MESTHIRI_MODEL_KEY }}

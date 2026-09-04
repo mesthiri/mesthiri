@@ -1,0 +1,54 @@
+# mesthiri — reusable dispatch workflow
+#
+# Called by the shim in each installed repository. This is where fixes ship:
+# a change here reaches every installed repo without a pull request to each,
+# which is also why the binary's checksum is verified rather than trusted.
+name: reusable-dispatch
+
+on:
+  workflow_call:
+    secrets:
+      reader-key: { required: true }
+      writer-key: { required: false }
+      model-key:  { required: false }
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Checks out the BASE branch. Under pull_request_target that is the
+      # default and is the point: mesthiri reads .mesthiri/config.scm and the
+      # rubric, which are the maintainers' files, never the pull request's.
+      # `persist-credentials: false` keeps the job token out of .git/config,
+      # where a later step could reuse it by accident.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned mesthiri release
+        env:
+          MESTHIRI_VERSION: v0.1.0
+        run: |
+          set -euo pipefail
+          base="https://github.com/mesthiri/mesthiri/releases/download/${MESTHIRI_VERSION}"
+          curl -fsSL -o mesthiri "${base}/mesthiri-x86_64-linux"
+          curl -fsSL -o SHA256SUMS "${base}/SHA256SUMS"
+          # Verify before making it executable, let alone running it. Every
+          # installed repo fetches this binary from a repository they do not
+          # control; the checksum is what bounds that trust.
+          grep " mesthiri-x86_64-linux\$" SHA256SUMS | sed 's/ .*/  mesthiri/' > expected.sha256
+          sha256sum -c expected.sha256
+          chmod +x mesthiri
+
+      - name: Dispatch
+        env:
+          MESTHIRI_READER_KEY: ${{ secrets.reader-key }}
+          MESTHIRI_WRITER_KEY: ${{ secrets.writer-key }}
+          MESTHIRI_MODEL_KEY: ${{ secrets.model-key }}
+          MESTHIRI_EVENT_NAME: ${{ github.event_name }}
+          MESTHIRI_EVENT_PATH: ${{ github.event_path }}
+          MESTHIRI_REPO: ${{ github.repository }}
+          MESTHIRI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ./mesthiri dispatch

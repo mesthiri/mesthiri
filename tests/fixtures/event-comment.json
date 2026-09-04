@@ -1,0 +1,5 @@
+{"action":"created",
+ "repository":{"full_name":"mesthiri/sandbox"},
+ "sender":{"login":"alice"},
+ "comment":{"id":99001,"body":"/implement please","user":{"login":"alice"}},
+ "issue":{"number":412,"labels":[{"name":"bug"}]}}
