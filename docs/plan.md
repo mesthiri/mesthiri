@@ -59,9 +59,9 @@ promptly and there is still nothing listening on a port.
       defect, a feature request, a docs typo, and one whose body tries to
       instruct the agent. Its shim and `.mesthiri/` are hand-committed until
       M9, and every stage is off but triage in dry-run.
-- [x] Branch protection on `mesthiri/mesthiri`: the `diagrams` check is
-      required, force pushes and deletions blocked, conversation resolution
-      required. Admins are not enforced, so the owner can still push to
+- [x] Branch protection on `mesthiri/mesthiri`: `diagrams`, `suite` and
+      `DCO` are all required, force pushes and deletions blocked,
+      conversation resolution required. Admins are not enforced, so the owner can still push to
       `main` directly; flip `enforce_admins` when outside contributions
       start.
 - [x] **DCO2 app** installed on `mesthiri/mesthiri` and `mesthiri/sandbox`
