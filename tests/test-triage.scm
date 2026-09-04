@@ -51,7 +51,12 @@
 (define good '(("priority" . "priority: high") ("tier" . 1)
                ("rationale" . "Reproduced against 8c697da; rubric §2.")))
 
-(define v (triage-issue #f #f "o/r" '(("number" . 412) ("title" . "t") ("body" . "b"))
+;; A forge that swallows writes. dry-run comments now, so #f here would be a
+;; call on a non-forge rather than the quiet no-op it used to be.
+(define quiet-forge (make-forge (lambda (m u h b) (values 200 '() "{}"))))
+
+(define v (triage-issue quiet-forge #f "o/r"
+                        '(("number" . 412) ("title" . "t") ("body" . "b"))
                         rubric "8c697da" 'dry-run (agent-returning good)))
 (check "priority comes back" "priority: high" (verdict-priority v))
 (check "tier comes back" 1 (verdict-tier v))
@@ -70,14 +75,31 @@
                                              ("rationale" . "r"))))
             #f))
 
-;; --- dry-run writes nothing ----------------------------------------------
+;; --- dry-run comments, and applies no labels -----------------------------
+;;
+;; This used to assert dry-run made no forge call at all, which is to say it
+;; asserted the defect: a stage that ran, reached a verdict, and left nothing
+;; where anyone would look for it. dry-run is what a fresh install ships, so
+;; that was the guide's entire first five minutes.
 (define writes '())
 (define counting-forge
-  (make-forge (lambda (m u h b) (set! writes (cons m writes)) (values 200 '() "{}"))))
+  (make-forge (lambda (m u h b)
+                (set! writes (cons (cons u (or b "")) writes))
+                (values 200 '() "{}"))))
 (set! writes '())
 (triage-issue counting-forge #f "o/r" '(("number" . 5) ("title" . "t") ("body" . "b"))
               rubric "abc" 'dry-run (agent-returning good))
-(check "dry-run makes no forge call at all" '() writes)
+(check "dry-run makes exactly one forge call" 1 (length writes))
+(check "and it is a comment on the issue"
+       #t (has? (car (car writes)) "/issues/5/comments"))
+(check "the comment says the verdict was not applied"
+       #t (has? (cdr (car writes)) "not applied"))
+;; The distinction dry-run exists for.
+(check "dry-run applies no label"
+       #f (let loop ((w writes))
+            (cond ((null? w) #f)
+                  ((has? (car (car w)) "/labels") #t)
+                  (else (loop (cdr w))))))
 
 ;; --- the comment a human reads -------------------------------------------
 (define c (verdict->comment v #t))

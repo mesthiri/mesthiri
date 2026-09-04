@@ -9,6 +9,18 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-09-04
+
+### Fixed
+
+- **`dry-run` comments its verdict.** It only logged, which made it
+  indistinguishable from `off` to anyone reading the issue — and `dry-run` is
+  what a fresh install ships, so that was the guide's entire first five
+  minutes: a stage that ran, reached a verdict, and left no trace where a
+  reader would look. `verdict->comment` had rendered the dry-run wording
+  since M4 and nothing called it. The test asserted "dry-run makes no forge
+  call at all", which is to say it asserted the defect.
+
 ## [0.1.7] — 2026-09-04
 
 Everything here came from watching the agent triage real issues with a real

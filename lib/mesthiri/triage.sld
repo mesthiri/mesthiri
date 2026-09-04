@@ -90,8 +90,19 @@
                                    rubric-sha)))
         (cond
          ((eq? mode 'dry-run)
+          ;; dry-run comments and applies no labels. It used to only log,
+          ;; which made it indistinguishable from `off` to anyone reading the
+          ;; issue — and dry-run is what a fresh install ships, so that was
+          ;; the whole first five minutes of the guide: a stage that ran,
+          ;; reached a verdict, and left no trace of it anywhere the reader
+          ;; would look. `verdict->comment` already rendered the dry-run
+          ;; wording; nothing called it.
+          (forge-post forge
+                      (string-append "/repos/" repo "/issues/"
+                                     (number->string number) "/comments")
+                      (json-body (verdict->comment v #t)))
           (log-info "issue " number " -> " (verdict-priority v)
-                    " (tier " (verdict-tier v) ") [dry-run, nothing written]")
+                    " (tier " (verdict-tier v) ") [dry-run: commented, no labels]")
           v)
          ((eq? mode 'live)
           (forge-post forge
