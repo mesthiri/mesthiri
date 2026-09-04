@@ -49,9 +49,9 @@ Everything here runs locally against fixtures. Nothing touches CI yet.
 
 - [ ] `lib/mesthiri/config.scm` reader — `.mesthiri/config.scm` parsed with
       `read`: rubric path, budgets, path denylist, command permissions,
-      pinned agent version, `operator:` identity. Startup validation refuses
-      a triage target with no rubric path and a code stage with no denylist
-      or operator.
+      pinned agent version, `operator:` identity. No target list — mesthiri
+      acts on the repository it is installed in. Validation refuses triage
+      with no rubric path, and a code stage with no denylist or operator.
 - [ ] `lib/mesthiri/event.sld` — the normalized event, built from the CI
       environment and the forge payload the shim passes through. One shape
       for issue, comment, PR, review and schedule events.
@@ -141,8 +141,9 @@ cannot reach a host off the allowlist.
       The mode CI exercises and the mode a new target runs in for a while.
 - [ ] Red-team fixture from day one: an issue whose body tries to instruct
       the agent, asserted to change no verdict.
-- [ ] The scheduled sweep, and its cursor on the `mesthiri-state` branch
-      with write-then-verify.
+- [ ] The scheduled sweep, finding its work by **querying the forge for
+      labels and update times** rather than keeping a cursor. Labels are the
+      watermark; mesthiri stores nothing a human cannot see in the repo.
 
 **Demo:** scheduled dry-run triage on kaappi/kaappi that the org owner
 spot-checks; going live is a config change.
@@ -193,9 +194,13 @@ third at tier 2 waiting for a human.
 
 - [ ] Mine completed CI runs and their JSONL trace artifacts for timings,
       iteration counts, spend and failure classes; file improvement
-      proposals as issues on mesthiri, where a human picks them up.
-      mesthiri is never a target of its own pipeline, and the config reader
-      refuses one that names it.
+      proposals as issues **on this repository** — flaky tests burning
+      budget, work that keeps escalating to a human, rubric gaps. It writes
+      where the work is, with the same repo-scoped token every other stage
+      uses, and needs no cross-repo credential.
+- [ ] Improvements to mesthiri itself arrive the ordinary way: a human
+      reads a retro issue and reports it upstream. mesthiri is never
+      installed on its own repository, and `mesthiri install` refuses it.
 
 ## M9 — Installation and distribution
 
@@ -205,10 +210,17 @@ third at tier 2 waiting for a human.
       fullsend's ADR 0006.
 - [ ] Release automation: build the standalone binary for Linux x86_64 and
       arm64, publish with SHA256SUMS, and pin it in the reusable workflow.
+      Layered distribution means a fix here reaches installed repos without
+      a pull request to each — and means every run depends on this
+      repository, which the checksum check is there to bound.
 - [ ] A preset for the kaappi org so its repos install with one command.
 
 ## Later / explicitly deferred
 
+- Vendored installs: writing the workflow and pinning the binary into the
+  target repo so nothing is fetched at run time. Worth having for an adopter
+  who reviews everything they run; not worth two code paths before there is
+  one such adopter.
 - GitLab: the same binary under GitLab CI, with fullsend's two-path model —
   native triggers where they exist, scheduled polling elsewhere.
 - A second agent backend, which is what would prove `agent.sld`'s boundary.
@@ -235,8 +247,11 @@ third at tier 2 waiting for a human.
 - **Containment is Linux-only**, which CI runners are; local development on
   macOS runs uncontained and must say so loudly at startup, because a
   security fallback that fails silently is worse than none.
-- **Cross-run spend caps are approximate**, since the state branch is not a
-  transaction log. Enough to stop a runaway, not to bill against.
+- **Cross-run spend caps are approximate and derived**, not counted: with
+  no cursor file there is nowhere to keep a counter, so a job queries recent
+  run history before starting an expensive stage. Lagging, and defeatable by
+  concurrent jobs starting at once. Enough to stop a runaway, not to bill
+  against.
 - **`openssl` must be on the runner** — it is, on every standard image, but
   a missing binary surfaces at authentication, so startup checks for it.
 - **The operator signs for work they have not read.** Settled in design.md

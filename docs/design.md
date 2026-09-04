@@ -70,8 +70,13 @@ optional; getting it wrong hands credentials to anyone who can open a pull
 request.
 
 **The reusable workflow** comes from this repository, downloads the pinned
-mesthiri release binary, verifies its checksum, and runs it. Infrastructure
-fixes therefore reach every installed repo without an install step.
+mesthiri release binary, verifies its checksum, and runs it. Distribution is
+**layered**: fixes to the workflow or the binary reach every installed repo
+without an install step or a pull request. The cost is that each run depends
+on this repository and its release assets being reachable, and that adopters
+are trusting a pinned tag — which is why the checksum is verified rather
+than assumed. Vendoring everything into the target repo instead is a
+reasonable thing to want and is listed under Later, not ruled out.
 
 **`mesthiri dispatch`** normalizes the CI event into one shape, authorizes
 it, matches it against the configured stage triggers, and runs the single
@@ -94,7 +99,10 @@ matching stage in that job. One event, one stage, one job.
 5. **Fix** (review findings): apply, push, re-run tests, to a bounded depth,
    then hand to a human.
 6. **Retro** (scheduled): mine completed runs for timings, iteration counts
-   and failure classes, and file improvement proposals as issues.
+   and failure classes, and file improvement proposals as issues **on this
+   repository** — flaky tests burning agent budget, issues that keep
+   escalating to a human, gaps in the rubric. It writes where the work is,
+   using the same repo-scoped token as every other stage.
 
 ## State without a database
 
@@ -112,18 +120,24 @@ is state a human can read, audit and correct without shell access.
   whether it has already acted on this comment, commit or event id before
   acting, and CI concurrency groups collapse rapid-fire edits into one run.
   Every handler is written to be safe to run twice, because it will be.
-- **Cursors and watermarks** for the scheduled sweeps live in a small JSON
-  file on an orphan `mesthiri-state` branch, updated with write-then-verify.
-  Durable, diffable, and requiring no infrastructure.
+- **There is no cursor file.** A scheduled sweep finds its work by querying
+  the forge — issues carrying a label, or updated since a timestamp it can
+  read from the issues themselves. Labels are the watermark. This costs more
+  API calls per sweep than a stored cursor and buys the property that
+  mesthiri keeps *no* state a human cannot see in the repository, and adds
+  no odd-looking orphan branch to someone else's project.
 - **Run history** is CI run history. Retro reads completed workflow runs and
   the JSONL trace each stage uploads as an artifact, rather than a table it
   maintained itself.
 
 The honest cost is spend accounting. A per-run budget is exact, because the
-run enforces it on itself. A per-day cap across runs needs shared state, and
-the state branch gives an approximate one — good enough to stop a runaway,
-not precise under concurrent jobs. That imprecision is accepted; the
-alternative was a database, and the database was the thing being deleted.
+run enforces it on itself. A cap *across* runs has nowhere to keep a
+counter, so it is derived instead: before starting an expensive stage, a job
+queries recent workflow runs and their traces and declines if the day's
+spend already looks exhausted. Approximate, lagging, and defeatable by
+concurrent jobs starting at once — good enough to stop a runaway, not to
+bill against. The alternative was a database, and the database was the thing
+being deleted.
 
 ## Configuration
 
@@ -133,8 +147,10 @@ S-expressions read with `read` — no parser, no dependency, and the obvious
 choice in a Scheme project, at the cost of being less familiar to a
 maintainer who expected YAML.
 
-- `.mesthiri/config.scm` — targets, rubric path, budgets, denylist, command
-  permissions, pinned agent version, operator identity.
+- `.mesthiri/config.scm` — rubric path, budgets, denylist, command
+  permissions, pinned agent version, operator identity. There is no list of
+  targets: mesthiri is installed on a repository and acts on that
+  repository.
 - `.mesthiri/harness/<role>.scm` — one file per agent role: system prompt,
   allowed tools, model and effort, budgets, sandbox policy. A role is
   configured in one reviewable file rather than scattered across workflow
@@ -273,7 +289,7 @@ stage refuses to run.
 | Stale approval | any new commit clears downstream workflow labels |
 | Config integrity | trigger predicates interpreted, never `eval`ed; `.mesthiri/` is on the denylist |
 | Sign-off | the configured operator certifies; never the bot |
-| Spend | per-run budgets exact; cross-run caps approximate, on the state branch |
+| Spend | per-run budgets exact; cross-run caps derived from recent run history, approximate by design |
 
 ## Non-goals
 
@@ -282,10 +298,11 @@ stage refuses to run.
   installation. mesthiri installs per repository, for one operator.
 - Replacing the target project's CI, review culture or triage rubric —
   mesthiri consumes those; it does not define them.
-- **Working on itself.** Retro files proposals as issues on mesthiri and a
-  human implements them. An orchestrator that can modify the code deciding
-  what it is allowed to do has no guardrail it cannot reach, and a flat rule
-  is easier to keep than a denylist is to get exhaustively right.
+- **Working on itself.** mesthiri is never installed on its own repository.
+  An orchestrator that can modify the code deciding what it is allowed to do
+  has no guardrail it cannot reach, and a flat rule is easier to keep than a
+  denylist is to get exhaustively right. Improvements to mesthiri arrive the
+  ordinary way: a human reads a retro issue and reports it here.
 - Matching fullsend's scope. It is years and an organization ahead on
   multi-forge support, org-scale installation and shared infrastructure.
   mesthiri's claim is narrower: one repository, one operator, one binary,
@@ -296,10 +313,6 @@ stage refuses to run.
 - The agent-backend protocol boundary: pi's RPC schema as-is, or a thin
   mesthiri envelope so backends swap without touching stage code. Decide
   when a second backend appears.
-- Whether the scheduled sweeps need a state branch at all, or whether label
-  queries against the forge are a sufficient cursor. The branch is the
-  conservative choice; dropping it would remove the last piece of mesthiri
-  state that is not already in the repository.
 - Forge abstraction: GitHub first. GitLab CI can run the same binary, and
   fullsend's two-path model — native triggers where they exist, scheduled
   polling elsewhere — is the shape to copy when it matters.

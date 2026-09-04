@@ -110,7 +110,7 @@ flowchart LR
   fix -->|"depth exhausted"| gate
   gate --> merged(["merged"])
   merged --> retro["Retro<br/>mine run records"]
-  retro -->|"proposals as issues<br/>on mesthiri"| human2{{"HUMAN<br/>implements them"}}
+  retro -->|"proposals as issues<br/>on this repo"| human2{{"HUMAN<br/>reads and acts"}}
 
   style gate fill:#ffe9b3,stroke:#b8860b,stroke-width:2px
   style human2 fill:#ffe9b3,stroke:#b8860b,stroke-width:2px
@@ -245,8 +245,8 @@ flowchart TD
 
 `*` — dashed modules are stage bodies for M5 onward; their names are
 indicative, since [plan.md](plan.md) has not fixed them yet. There is no
-store module: state lives in labels, in the forge, and in a cursor file on
-the `mesthiri-state` branch.
+store module, and no cursor file: state lives in labels and in the forge,
+and scheduled sweeps find their work by querying it.
 
 ## 7. External dependencies
 
