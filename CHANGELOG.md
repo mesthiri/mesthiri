@@ -9,6 +9,32 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-09-04
+
+Everything here came from watching the agent triage real issues with a real
+model, which is a class of defect no test written beforehand had found.
+
+### Fixed
+
+- **The agent runs in the directory it was given.** `agent-argv` took a
+  `workdir` and ignored it; the only thing setting a working directory was
+  bwrap's `--chdir`, so an uncontained run inherited whatever directory
+  mesthiri was launched from. Locally that meant the agent read the
+  operator's own checkout instead of the clone it was meant to judge — and
+  reached the right verdict from the wrong evidence, which a green result
+  would have hidden.
+- **The verdict is extracted from the reply rather than assumed to be it.**
+  Of the first four real verdicts, two were bare JSON, one opened with a
+  paragraph of reasoning, and one was inside a ```` ```json ```` fence.
+  Parsing the reply as-is raised on half of them, after the tokens were
+  spent. A schema in the prompt does not buy a bare reply.
+- **Triage gets the code it is asked to check.** It was handed an empty
+  `RUNNER_TEMP`; the first live run shows the model working that out and
+  spending two of its twelve turns hunting the filesystem. It now gets its
+  own clone — its own rather than the job's checkout, since the sandbox
+  binds the workdir writable and the checkout is where mesthiri reads the
+  config and rubric from.
+
 ## [0.1.6] — 2026-09-04
 
 ### Fixed
