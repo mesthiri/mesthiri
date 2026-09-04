@@ -21,6 +21,11 @@ was wrong; `README.md` is the public face. Keep all six in sync with
 reality — this repo has no code yet, and the README and the guide must both
 keep saying so until it does.
 
+`AGENTS.md` is a symlink to this file, so tools looking for either name get
+the same instructions. Edit this file, not the link. Note that an
+`/init`-style command which *generates* `AGENTS.md` writes through the
+symlink and would overwrite everything here.
+
 ## Conventions
 
 - Kaappi Scheme, 2-space indentation, R7RS style (same as the kaappi org).
