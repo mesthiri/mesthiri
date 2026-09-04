@@ -204,25 +204,37 @@ grep " mesthiri-x86_64-linux$" SHA256SUMS | shasum -a 256 -c -
 If that fails, stop. Do not proceed to Step 9 — an unrolled-out bad release
 harms nobody.
 
-## Step 9 — Roll out (a separate decision)
+## Step 9 — Roll out by moving the major tag
 
-Only now bump the pin every installed repository runs:
+Installed repositories run a shim that says:
 
 ```yaml
-# .github/workflows/reusable-dispatch.yml
-MESTHIRI_VERSION: vX.Y.Z
+uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
 ```
 
-Commit it on its own, so the rollout is one revertible commit rather than
-part of the release commit:
+They resolve `@v0` and **never see `main`**, so editing anything on `main`
+rolls out nothing. The rollout is moving that tag:
 
 ```bash
-git commit -s -m "Roll out vX.Y.Z to installed repositories"
+git tag -f v0 vX.Y.Z
+git push -f origin v0
 ```
 
-**Rolling back is reverting this commit**, not deleting a release. Say so to
-the user, because the instinct under pressure is to delete the release, which
-breaks the checksum fetch for anyone mid-run.
+That moves the workflow *and* the `MESTHIRI_VERSION` pin inside it together,
+which is the point: an installed repository gets a matched pair rather than a
+new workflow fetching an old binary.
+
+**Rolling back is moving `v0` back to the previous release**, not deleting
+anything. Say so, because the instinct under pressure is to delete the bad
+release — which breaks the checksum fetch for anyone mid-run and leaves `v0`
+pointing at a workflow whose download 404s.
+
+```bash
+git tag -f v0 vPREVIOUS && git push -f origin v0
+```
+
+A force-push to a tag is the one place this project does that, and it is
+deliberate: the major tag is a pointer, not history.
 
 ## Step 10 — Confirm a real repository still works
 
