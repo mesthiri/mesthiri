@@ -64,8 +64,20 @@ promptly and there is still nothing listening on a port.
       required. Admins are not enforced, so the owner can still push to
       `main` directly; flip `enforce_admins` when outside contributions
       start.
-- [ ] DCO app installed on `mesthiri/mesthiri` (human-only) and added to
-      the required checks once it reports.
+- [ ] **DCO2 app** installed on `mesthiri/mesthiri` and `mesthiri/sandbox`
+      (human-only): <https://github.com/apps/dco-2>, source
+      [cncf/dco2](https://github.com/cncf/dco2) — the same app the kaappi org
+      uses, not the older `apps/dco`. `.github/dco.yml` is already seeded in
+      both repos, matching the org's template. The status check it posts is
+      named **`DCO`**, so after installing:
+
+      ```
+      gh api -X PATCH repos/mesthiri/mesthiri/branches/main/protection/required_status_checks \
+        -f 'contexts[]=diagrams' -f 'contexts[]=suite' -f 'contexts[]=DCO'
+      ```
+
+      `infra/scripts/require-dco-check.sh` does this for kaappi repos but
+      hardcodes that org, so it does not apply here.
 - [x] CI for this repo, docs half: `.github/workflows/docs.yml` validates
       every Mermaid block on push and pull request.
 - [x] CI for this repo, code half: `.github/workflows/test.yml` runs the

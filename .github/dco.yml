@@ -1,0 +1,22 @@
+# Config for the DCO2 GitHub App (https://github.com/cncf/dco2),
+# installed from https://github.com/apps/dco-2.
+# Backwards compatible with the original dcoapp/app format.
+#
+# Seeded to match the kaappi org's template (infra/templates/dco.yml), so
+# mesthiri's own contribution rules read the same as the org it came from.
+
+# Allow a contributor to retroactively sign off commits that failed the
+# check, without rewriting history (adds a remediation commit instead).
+allowRemediationCommits:
+  individual: true
+  thirdParty: false
+
+# Show the "Set DCO to pass" override button to maintainers on the check
+# details page, for edge cases.
+#
+# Worth knowing why mesthiri keeps this on rather than relying on it: a
+# mesthiri-authored commit is signed off by the configured operator and
+# authored by them too, precisely so it passes this check unaided — DCO
+# checkers compare sign-off against author and reject a mismatch. The
+# override is the escape hatch for when that goes wrong, not the mechanism.
+allowOverrideAction: true
