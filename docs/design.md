@@ -186,8 +186,15 @@ maintainer who expected YAML.
   identity. There is no list of targets: mesthiri is installed on a
   repository and acts on that repository. The App IDs are public
   configuration; only the private keys are secrets. The guide's sample —
-  deny-paths, `max-tier 0`, budgets, pinned pi and model versions — is the
-  scaffold contract `install` produces, not an illustration.
+  deny-paths, `max-tier 0`, budgets, the pinned agent version — is the
+  scaffold contract `install` produces, not an illustration. No model
+  appears in it: models are a per-role choice and live in harness files,
+  which is the backend/provider/model distinction `terminology.md` warns is
+  easy to collapse.
+- **`version`** is the config schema's own version, and mesthiri refuses a
+  config whose version it does not know rather than guessing at fields it
+  may not understand. It is the one field that exists for mesthiri's benefit
+  rather than the repository's.
 - `.mesthiri/harness/<role>.scm` — one file per agent role: system prompt,
   allowed tools, which provider and model, effort, budgets, sandbox policy.
   A role is configured in one reviewable file rather than scattered across

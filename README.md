@@ -70,9 +70,9 @@ match it to exactly one stage, run that stage in
 that job. The coding agent — [pi](https://pi.dev/) first, via its `--rpc`
 JSON-over-stdio mode — runs inside a namespace sandbox within the job, with
 the scratch clone as its only writable path. State lives in the repository:
-workflow state in labels a human can read and change, the same labels acting
-as the cursor for scheduled sweeps, and run history in your CI's own run
-history — mesthiri keeps no state you cannot see. Guardrails are
+workflow state in labels a human can read and change, those same labels
+acting as the watermark for scheduled sweeps, and run history in your CI's
+own run history — mesthiri keeps no state you cannot see. Guardrails are
 structural: no App holds merge permission, the shim uses
 `pull_request_target` and never checks out a PR's code, the agent holds no
 credential and has no route to the forge — it writes commits and the job

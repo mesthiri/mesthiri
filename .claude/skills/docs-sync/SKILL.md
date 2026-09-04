@@ -92,6 +92,17 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
    milestone from M2 needs a shim that nothing creates until M9.
 10. **A claim asserted without a test.** "Parse alone misses classDef
     errors" was written into CLAUDE.md and turned out false when tested.
+11. **A field attributed to the wrong file.** design.md described the config
+    sample as pinning "pi and model versions"; the sample deliberately has
+    no model, because models are per-role and live in harness files. Check
+    any sentence that summarises one file's contents from inside another.
+12. **A field in a declared contract that nothing defines.** `(version 1)`
+    sat in the sample config — which design.md calls the scaffold contract —
+    with no description of what it means or what a mismatch does.
+13. **A retired word used for the live concept.** README called labels "the
+    cursor" for scheduled sweeps after terminology.md retired `cursor` and
+    made `watermark` the live word. Check 5 finds these; check 4 will not,
+    because the live term is present elsewhere and the count looks fine.
 
 ## Report and record
 

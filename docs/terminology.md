@@ -78,6 +78,10 @@ key from. Declared once in config and referenced by name.
 **Model** — the exact model a role uses, named in full. Floating aliases
 are rejected rather than resolved.
 
+**Config version** — the `(version N)` at the top of
+`.mesthiri/config.scm`, naming the schema the file is written against.
+mesthiri refuses a version it does not know rather than guessing.
+
 **Harness** — one file per role holding everything that turns a generic
 model into that role: system prompt, allowed tools, provider and model,
 effort, budgets, sandbox policy. mesthiri ships a default for every role;
