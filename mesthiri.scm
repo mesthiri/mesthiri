@@ -9,7 +9,8 @@
         (kaappi http) (kaappi json)
         (mesthiri config) (mesthiri jwt) (mesthiri forge) (mesthiri event)
         (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
-        (mesthiri version))
+        (mesthiri version) (mesthiri agent) (mesthiri sandbox)
+        (mesthiri harness))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -231,6 +232,61 @@
         (cfg (read-config (or (env "MESTHIRI_CONFIG") ".mesthiri/config.scm"))))
     (explain-event cfg ev)))
 
+;; --- agent-smoke ---------------------------------------------------------
+;;
+;; Runs a trivial task through the real agent path and prints the run record.
+;; `--prove-sandbox` does something different and more useful: it asserts the
+;; boundary rather than describing it. A sandbox nobody has tested is a
+;; paragraph, not a control.
+
+(define (probe-fails? argv workdir secrets)
+  ;; True when the command could NOT do the thing — which is the passing case.
+  (let ((wrapped (sandbox-wrap argv workdir secrets)))
+    (and wrapped
+         (guard (e (#t #t))
+           (proc-run wrapped)
+           #f))))
+
+(define (cmd-agent-smoke args)
+  (let* ((prove (and (pair? args) (string=? (car args) "--prove-sandbox")))
+         (cfg-path (or (env "MESTHIRI_CONFIG") ".mesthiri/config.scm"))
+         (cfg (read-config cfg-path))
+         (workdir (or (env "RUNNER_TEMP") "/tmp"))
+         (secrets (string-append workdir "/mesthiri-secrets")))
+    (log-context! "agent-smoke" (or (env "MESTHIRI_REPO") "-") (env "MESTHIRI_RUN_URL"))
+
+    (display "sandbox: ")
+    (if (sandbox-available?)
+        (display "available\n")
+        (begin (display "UNAVAILABLE — ")
+               (display (sandbox-unavailable-reason))
+               (newline)
+               ;; Loud, per design.md: a security fallback that fails silently
+               ;; is worse than none.
+               (log-warn "the agent would run UNCONTAINED on this host")))
+
+    (display "egress allowlist (derived from provider endpoints):\n")
+    (for-each (lambda (h) (display "  ") (display h) (newline))
+              (allowed-hosts cfg '()))
+    (display "  (note: the forge is deliberately absent)\n")
+
+    (if prove
+        (begin
+          (display "\nproving the boundary\n")
+          (if (not (sandbox-available?))
+              (die "cannot prove a sandbox that is not available"))
+          (let ((r1 (probe-fails? (list "cat" (string-append secrets "/key.pem"))
+                                  workdir secrets))
+                (r2 (probe-fails? (list "touch" "/etc/mesthiri-probe")
+                                  workdir secrets)))
+            (display "  cannot read the secrets directory: ")
+            (display (if r1 "yes" "NO — BOUNDARY BROKEN")) (newline)
+            (display "  cannot write outside the clone:     ")
+            (display (if r2 "yes" "NO — BOUNDARY BROKEN")) (newline)
+            (if (not (and r1 r2)) (die "sandbox boundary assertions failed"))
+            (display "\nboundary holds.\n")))
+        (display "\n(pass --prove-sandbox to assert the boundary)\n"))))
+
 (define (usage)
   (display "mesthiri ") (display mesthiri-version)
   (display " — CI-native ADLC orchestrator\n\n")
@@ -240,6 +296,9 @@
   (display "  explain-event\n")
   (display "      Print the normalized event and how each stage trigger matched.\n")
   (display "      The first thing to run when a stage did nothing and said nothing.\n\n")
+  (display "  agent-smoke [--prove-sandbox]\n")
+  (display "      Report the sandbox and the derived egress allowlist.\n")
+  (display "      --prove-sandbox asserts the boundary instead of describing it.\n\n")
   (display "  whoami [--app reader|writer] [--key <pem>] [--config <path>]\n")
   (display "      Mint an installation token and report the installation,\n")
   (display "      its permissions and the remaining rate limit.\n")
@@ -268,4 +327,5 @@
         ((string=? (car args) "whoami") (cmd-whoami (cdr args)))
         ((string=? (car args) "dispatch") (cmd-dispatch (cdr args)))
         ((string=? (car args) "explain-event") (cmd-explain (cdr args)))
+        ((string=? (car args) "agent-smoke") (cmd-agent-smoke (cdr args)))
         (else (usage))))

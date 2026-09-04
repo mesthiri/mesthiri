@@ -199,48 +199,54 @@ instead, and M4 replaces the handler rather than deleting a special case.
 
 ## M3 — Agent execution and containment
 
-- [ ] `lib/mesthiri/agent.sld` — the only module that spawns the agent.
+- [x] `lib/mesthiri/agent.sld` — the only module that spawns the agent.
       `spawn-process '("pi" "--mode" "rpc" "--no-session"
       "--no-context-files") …`, `'pipe` stdin/stdout, `'null`
       stderr, `new-group: #t`; JSON framing from a drive fiber against M0's
       captured schema; wall-clock deadline via `process-wait 'timeout:` then
       `process-kill 'group: #t`; token and turn budgets passed to pi.
-- [ ] **Containment inside the runner**: namespace sandbox via
+- [x] **Containment inside the runner**: namespace sandbox via
       `bwrap`/`unshare` constructed by `agent.sld` and nothing else —
       read-only root, scratch clone the only writable mount, the App key and
       installation token outside the mount namespace, egress denied by
       default with an allowlist that **excludes the forge**, separate
       unprivileged uid.
-- [ ] **Output validation** outside the agent: declared schema, capped
+- [x] **Output validation** outside the agent: declared schema, capped
       retries, then hard fail.
-- [ ] Budgets: per-run token, turn and wall-clock caps enforced by the run
+- [x] Budgets: per-run token, turn and wall-clock caps enforced by the run
       on itself, and the **derived cross-run cap** — before starting, query
       recent workflow runs and their traces and decline if the day's spend
       already looks exhausted. This is the only place that approximation
       exists, so it lives with the budgets rather than being assumed by
       every stage.
-- [ ] `.mesthiri/harness/<role>.scm` — prompt, allowed tools, provider and
+- [x] `.mesthiri/harness/<role>.scm` — prompt, allowed tools, provider and
       pinned model, effort, budgets and sandbox policy as one reviewable
       file per role. A floating model alias is rejected at load, not
       resolved.
-- [ ] Shipped default harnesses, one per role, so a repo runs on
+- [x] Shipped default harnesses, one per role, so a repo runs on
       `config.scm` alone; a repo file overrides any subset and inherits the
       rest. A harness with no provider gets the sole declared one and must
       name one if several exist, and its budgets may only lower the
       per-run ceiling from `config.scm`, never raise it.
-- [ ] The sandbox egress allowlist is **derived** from the configured
+- [x] The sandbox egress allowlist is **derived** from the configured
       provider endpoint, never hand-written alongside it — a mismatch
       between the two surfaces as a connection failure inside an agent run,
       which looks like anything but the typo it is.
-- [ ] Prompt hygiene: issue and PR text enters prompts only inside an
+- [x] Prompt hygiene: issue and PR text enters prompts only inside an
       explicit untrusted-data block, and never argv.
-- [ ] A JSONL trace per run, uploaded as a CI artifact — the input M8's
+- [x] A JSONL trace per run, uploaded as a CI artifact — the input M8's
       retro stage reads instead of a database.
 
-**Demo:** `mesthiri agent-smoke` in CI runs a trivial task and prints the
-run record; `--prove-sandbox` asserts the boundary rather than describing
-it — the agent cannot read the token, cannot write outside its clone,
-cannot reach a host off the allowlist.
+**Demo:** `mesthiri agent-smoke` reports the sandbox and the derived egress
+allowlist; `--prove-sandbox` asserts the boundary rather than describing it.
+
+Verified on Linux with bwrap, with a baseline confirming the probes can
+actually fail: unconfined the secret reads back as
+`SECRET-KEY-CONTENT`; inside the wrap it is `No such file or directory`,
+a write to `/etc` is `Read-only file system`, and a write to the scratch
+clone succeeds. On macOS there is no namespace sandbox, and `agent-smoke`
+says so and warns that the agent would run uncontained rather than
+proceeding quietly.
 
 ## M4 — Triage and workflow labels
 

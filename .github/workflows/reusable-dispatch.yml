@@ -70,3 +70,15 @@ jobs:
           MESTHIRI_REPO: ${{ github.repository }}
           MESTHIRI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ./mesthiri dispatch
+
+      # The trace is the run record plus the per-turn detail retro reads —
+      # a CI artifact rather than a database row, so retention is CI's.
+      # `if: always()` because a failed run is the one worth reading.
+      - name: Upload the run trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesthiri-trace-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mesthiri-trace-*.jsonl
+          if-no-files-found: ignore
+          retention-days: 30
