@@ -28,5 +28,11 @@ for t in tests/test-*.scm; do
   rm -f "$err"
 done
 
+# Static checks. These cover the seams the .scm tests cannot see: a module
+# can be fully tested and still not be wired into the entry point.
+echo
+echo "static checks"
+./scripts/check-handlers.sh || status=1
+
 if [ $status -ne 0 ]; then echo; echo "SUITE FAILED"; fi
 exit $status

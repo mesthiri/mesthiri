@@ -10,7 +10,8 @@
 
 (define-library (mesthiri git)
   (import (scheme base) (scheme write) (scheme char) (mesthiri proc))
-  (export git-clone git-branch git-add-all git-commit git-push
+  (export git-clone git-clone-branch git-branch git-checkout
+          git-log-subjects git-add-all git-commit git-push
           git-changed-files git-has-changes? branch-name-for
           commit-message trailers)
   (begin
@@ -32,6 +33,20 @@
        (append (list "git")
                (credential-args token-file)
                (list "clone" "--depth" "1" url dir))))
+
+    ;; Fix works on a branch that already exists, so it cannot use the clone
+    ;; above: that takes the default branch, and `git-branch` would then try
+    ;; to create a branch whose name is already taken on the remote. The
+    ;; depth is 50 rather than 1 because fix counts its own previous
+    ;; attempts from the branch's commit subjects — a shallow clone of one
+    ;; commit reports depth 0 forever, and the bound would never bind.
+    (define (git-clone-branch url dir branch token-file)
+      (proc-run/string
+       (append (list "git")
+               (credential-args token-file)
+               (list "clone" "--depth" "50" "--branch" branch url dir))))
+
+    (define (git-checkout dir name) (git dir "checkout" name))
 
     ;; `git -c credential.helper=` first, to discard any helper the host has
     ;; configured rather than adding to it.
@@ -57,6 +72,12 @@
 
     (define (git-branch dir name) (git dir "checkout" "-b" name))
     (define (git-add-all dir) (git dir "add" "-A"))
+
+    ;; Subjects only, newest first. Fix counts its own attempts from these,
+    ;; so the shape must stay one subject per line.
+    (define (git-log-subjects dir n)
+      (lines (git dir "log" (string-append "-" (number->string n))
+                   "--format=%s")))
 
     ;; Author and committer are both the operator, because DCO checkers
     ;; compare the sign-off against the author and reject a mismatch. The

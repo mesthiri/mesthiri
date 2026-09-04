@@ -175,6 +175,33 @@
 (define _d2 (dispatch f cfg (ev 'issue-opened "alice" '()) handlers never-handled))
 (check "a trigger dispatch passes no command" #f seen-cmd)
 
+
+;; A command whose stage has no handler must be reported, not swallowed.
+;;
+;; This is what `/fix` did for two milestones: `fix` was in `command-table`
+;; and in `all-stages`, `(mesthiri fix)` was written and tested, and no
+;; handler was ever registered — so a typed `/fix` parsed, authorized, and
+;; produced nothing at all. The outcome existed; nothing asserted on it.
+(define cfg-with-fix
+  (parse-config
+   '(mesthiri (version 1)
+      (stages
+        (fix (on (command "/fix")) (mode live))))
+   "test"))
+
+(define pr-comment
+  (make-event 'issue-comment "o/r" "alice" 1 '() "/fix" "" 1 #f #f #t))
+
+(define d-nohandler
+  (dispatch f cfg-with-fix pr-comment '() never-handled))
+(check "a command with no registered handler reports no-handler"
+       'no-handler (decision-outcome d-nohandler))
+(check "and names the stage, so the message can say which"
+       'fix (decision-stage d-nohandler))
+(check "and carries the command, so the caller knows someone typed it"
+       "fix" (and (decision-command d-nohandler)
+                  (symbol->string (command-name (decision-command d-nohandler)))))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))

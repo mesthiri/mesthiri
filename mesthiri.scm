@@ -510,6 +510,154 @@
                                            (number->string number)))))
       b)))
 
+;; Fix consumes the review's findings on a pull request mesthiri opened.
+;;
+;; The authorship rule is not a convenience: fix pushes, and pushing to a
+;; branch someone else owns is not mesthiri's to do. An explicit /fix does
+;; not override it — unlike /review, where a human asking is exactly what
+;; authorizes reading a foreign diff, here the human asking still cannot
+;; grant mesthiri a right over another contributor's branch.
+;;
+;; Depth is counted from the branch's own commit subjects rather than a
+;; counter, so a restarted job does not get a fresh allowance.
+(define (fix-handler forge config event cmd)
+  (let* ((repo (event-repo event))
+         (number (event-number event))
+         (mode (stage-mode (config-stage config 'fix)))
+         (pr (forge-get forge (string-append "/repos/" repo "/pulls/"
+                                             (number->string number)))))
+    (cond
+     ((eq? mode 'off) (log-info "fix stage is off"))
+     ((not (mesthiri-authored? pr))
+      ;; Somebody typed /fix. Answer them.
+      (post-comment forge event
+                    (string-append
+                     "Not run: fix only works on pull requests mesthiri "
+                     "opened. This one is "
+                     (let* ((u (assoc "user" pr))
+                            (l (and u (assoc "login" (cdr u)))))
+                       (if l (string-append "@" (cdr l) "'s") "someone else's"))
+                     ", and pushing to another contributor's branch is not "
+                     "mine to do. Review can read any pull request; fix "
+                     "cannot write to one."))
+      (log-info "fix: not a mesthiri pull request; refused"))
+     (else
+      (let ((findings (review-findings-on forge repo number)))
+        (if (null? findings)
+            (begin
+              (post-comment forge event
+                            "Nothing to fix: no review findings on this pull request.")
+              (log-info "fix: no findings"))
+            (run-fix-stage forge config event repo number mode findings)))))))
+
+;; The review's own comments, recognised by the heading it writes. A
+;; dimension that found nothing says so in the same shape, and is dropped
+;; here rather than handed to the agent as a finding to address.
+(define (review-findings-on forge repo number)
+  (let loop ((cs (forge-get-all forge
+                                (string-append "/repos/" repo "/issues/"
+                                               (number->string number)
+                                               "/comments")))
+             (acc '()))
+    (cond ((null? cs) (reverse acc))
+          (else
+           (let* ((b (assoc "body" (car cs)))
+                  (body (and b (string? (cdr b)) (cdr b))))
+             (loop (cdr cs)
+                   (if (and body
+                            (contains? body "**Review: ")
+                            (not (contains? body "No findings on this dimension.")))
+                       (cons body acc)
+                       acc)))))))
+
+(define (run-fix-stage forge config event repo number mode findings)
+  (let* ((hn (read-harness ".mesthiri" 'code))
+         (pname (or (harness-provider hn) (car (config-provider-names config))))
+         (model (harness-model hn))
+         (branch (branch-name-for number))
+         (workdir (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                 "/mesthiri-fix-" (number->string number)))
+         (trace (string-append (or (env "RUNNER_TEMP") "/tmp")
+                               "/mesthiri-trace-fix-" (number->string number)
+                               ".jsonl"))
+         (wf (call-with-values (lambda () (authed-forge 'writer))
+                               (lambda (f c t) (cons f t))))
+         (token-file (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                    "/mesthiri-push-fix-" (number->string number))))
+    (proc-run (list "rm" "-rf" workdir))
+    (call-with-output-file token-file (lambda (p) (write-string (cdr wf) p)))
+    (proc-run (list "chmod" "600" token-file))
+    (git-clone-branch (string-append "https://github.com/" repo)
+                      workdir branch token-file)
+    (let ((depth (depth-from-commits (git-log-subjects workdir 50))))
+      (if (>= depth fix-depth-limit)
+          (begin
+            (post-comment forge event (handover-comment depth #f))
+            (apply-label forge repo number "needs-human")
+            (proc-run (list "rm" "-f" token-file))
+            (log-info "fix: depth " depth " spent, handed over"))
+          (let* ((diff (forge-request-diff forge repo number))
+                 (run (agent-runner config hn pname model workdir trace event))
+                 (joined (join-findings findings))
+                 (result (guard (e (#t (list (cons "summary" "the agent run failed")
+                                             (cons "tests_pass" #f))))
+                           (run (fix-prompt joined diff (config-test-command config)))))
+                 (ok (guard (e ((output-error? e)
+                                (list (cons "summary" (output-error-message e))
+                                      (cons "tests_pass" #f))))
+                       (validate-output result fix-schema)))
+                 (green (cdr (assoc "tests_pass" ok)))
+                 (summary (cdr (assoc "summary" ok))))
+            (cond
+             ((not (git-has-changes? workdir))
+              (post-comment forge event
+                            (string-append
+                             "No change made. The agent reported:\n\n" summary))
+              (log-info "fix: no changes"))
+             ((string? (check-diff (git-changed-files workdir)
+                                   (config-deny-paths config)))
+              (post-comment forge event
+                            (check-diff (git-changed-files workdir)
+                                        (config-deny-paths config)))
+              (log-warn "fix: refused, diff touched a denied path"))
+             ((eq? mode 'dry-run)
+              (log-info "fix: would push " (length (git-changed-files workdir))
+                        " file(s) [dry-run]"))
+             (else
+              (git-add-all workdir)
+              (git-commit workdir
+                          (string-append "Fix review findings on #"
+                                         (number->string number))
+                          (string-append summary "\n\n"
+                                         (trailers (config-operator-name config)
+                                                   (config-operator-email config)
+                                                   "mesthiri[bot] <mesthiri@users.noreply.github.com>"
+                                                   mesthiri-version "pi"
+                                                   (or (config-agent-version config) "?")
+                                                   pname (or model "?")
+                                                   (or (env "MESTHIRI_RUN_URL") "-")))
+                          (config-operator-name config)
+                          (config-operator-email config))
+              (git-push workdir branch token-file)
+              (post-comment forge event
+                            (string-append
+                             "Pushed a fix (attempt " (number->string (+ depth 1))
+                             " of " (number->string fix-depth-limit) ").\n\n"
+                             summary
+                             (if green "" "\n\n**The tests are still not green.**")))
+              (log-info "fix: pushed attempt " (+ depth 1))))
+            (proc-run (list "rm" "-f" token-file)))))))
+
+(define (join-findings findings)
+  (let loop ((f findings) (acc ""))
+    (if (null? f) acc (loop (cdr f) (string-append acc (car f) "\n\n")))))
+
+(define (apply-label forge repo number name)
+  (forge-post forge
+              (string-append "/repos/" repo "/issues/"
+                             (number->string number) "/labels")
+              (string-append "{\"labels\":[\"" name "\"]}")))
+
 ;; Retro reads what CI already keeps — completed runs and the traces they
 ;; uploaded — and files proposals on this repository. It never acts on them:
 ;; mesthiri is not installed on its own repository, so a proposal about
@@ -610,6 +758,7 @@
                              (cons 'prioritize prioritize-handler)
                              (cons 'code code-handler)
                              (cons 'review review-handler)
+                             (cons 'fix fix-handler)
                              (cons 'retro retro-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
@@ -621,7 +770,21 @@
             (post-comment forge ev (string-append "Not run: " (decision-reason d) ".")))
         (if (eq? (decision-outcome d) 'stage-off)
             (if (decision-command d)
-                (post-comment forge ev (string-append "Not run: " (decision-reason d) "."))))))))
+                (post-comment forge ev (string-append "Not run: " (decision-reason d) "."))))
+        ;; A command whose stage has no handler is a mesthiri defect, not a
+        ;; user error — but the person who typed it must not be met with
+        ;; silence while we work that out. `/fix` was in the command table and
+        ;; in `all-stages` from M7, and its handler was never registered: it
+        ;; parsed, authorized, reached this outcome, and posted nothing. The
+        ;; static check in `scripts/check-handlers.sh` stops it recurring;
+        ;; this stops it being invisible when it does.
+        (if (and (eq? (decision-outcome d) 'no-handler) (decision-command d))
+            (post-comment forge ev
+                          (string-append
+                           "Not run: the `" (symbol->string (decision-stage d))
+                           "` stage is not wired up in this build of mesthiri ("
+                           mesthiri-version "). That is a bug in mesthiri, not "
+                           "in what you typed.")))))))
 
 (define (cmd-explain args)
   (let ((ev (load-event))
