@@ -357,15 +357,22 @@ hands over with `needs-human`.
 
 ## M8 — Retro
 
-- [ ] Mine completed CI runs and their JSONL trace artifacts for timings,
+- [x] Mine completed CI runs and their JSONL trace artifacts for timings,
       iteration counts, spend and failure classes; the trace contains the
       run record, retention follows CI artifact retention. File
       improvement proposals as issues **on the repository mesthiri is
-      installed in** — flaky tests burning
-      budget, work that keeps escalating to a human, rubric gaps. It writes
-      where the work is, with the same repo-scoped token every other stage
-      uses, and needs no cross-repo credential.
-- [ ] Improvements to mesthiri itself arrive the ordinary way: a human
+      installed in** — flaky tests burning budget, work that keeps escalating
+      to a human, rubric gaps. It writes where the work is, with the same
+      repo-scoped token every other stage uses, and needs no cross-repo
+      credential.
+
+      Honest limitation: retro currently classifies from the workflow-run API
+      (conclusion, and the stage inferred from the run name), not yet from
+      the JSONL traces themselves. Downloading and folding the traces would
+      give it spend and iteration counts; the run list gives it failure
+      classes. The analysis is written to take either, so that is an
+      extension rather than a rewrite.
+- [x] Improvements to mesthiri itself arrive the ordinary way: a human
       reads a retro issue and reports it upstream. mesthiri is never
       installed on its own repository — the `mesthiri/mesthiri` string-match
       refusal lands with `install` in M9; until then it is a rule in the

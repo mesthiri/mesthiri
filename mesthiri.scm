@@ -13,7 +13,7 @@
         (mesthiri harness) (mesthiri triage) (mesthiri labels)
         (mesthiri sweep) (mesthiri prioritize) (mesthiri code)
         (mesthiri eligibility) (mesthiri git) (mesthiri review)
-        (mesthiri fix))
+        (mesthiri fix) (mesthiri retro))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -419,6 +419,61 @@
                                            (number->string number)))))
       b)))
 
+;; Retro reads what CI already keeps — completed runs and the traces they
+;; uploaded — and files proposals on this repository. It never acts on them:
+;; mesthiri is not installed on its own repository, so a proposal about
+;; mesthiri reaches it through a human who read one.
+(define (retro-handler forge config event)
+  (let* ((repo (event-repo event))
+         (mode (stage-mode (config-stage config 'retro)))
+         (runs (recent-runs forge repo))
+         (obs (analyze-runs runs))
+         (open (guard (e (#t '()))
+                 (forge-get-all forge (string-append "/repos/" repo
+                                                     "/issues?state=open&per_page=100")))))
+    (log-info "retro: " (length runs) " runs, " (length obs) " observation(s)")
+    (for-each
+     (lambda (o)
+       (cond
+        ((already-filed? open o)
+         (log-info "retro: already filed — " (observation->title o)))
+        ((eq? mode 'live)
+         (forge-post forge (string-append "/repos/" repo "/issues")
+                     (json-write-string
+                      (list (cons "title" (observation->title o))
+                            (cons "body" (observation->body o retro-window)))))
+         (log-info "retro: filed — " (observation->title o)))
+        (else
+         (log-info "retro: would file — " (observation->title o) " [dry-run]"))))
+     obs)))
+
+;; Run summaries from the workflow-run API. The stage and outcome are not
+;; fields GitHub keeps, so they come from the run name mesthiri sets — a
+;; deliberate limitation recorded rather than papered over: retro sees what
+;; CI kept, and CI keeps runs, not mesthiri's internal outcomes.
+(define (recent-runs forge repo)
+  (guard (e (#t '()))
+    (let* ((r (forge-get forge
+                (string-append "/repos/" repo
+                               "/actions/runs?per_page="
+                               (number->string retro-window))))
+           (rs (let ((x (assoc "workflow_runs" r))) (if x (cdr x) '()))))
+      (map (lambda (run)
+             (list (cons "conclusion" (or (assoc-cdr run "conclusion") ""))
+                   (cons "stage" (stage-from-name (assoc-cdr run "name")))
+                   (cons "outcome" "")))
+           rs))))
+
+(define (assoc-cdr o k) (let ((x (assoc k o))) (and x (cdr x))))
+
+(define (stage-from-name name)
+  (if (string? name)
+      (let loop ((stages '("triage" "prioritize" "code" "review" "fix" "retro")))
+        (cond ((null? stages) "unknown")
+              ((find-sub name (car stages)) (car stages))
+              (else (loop (cdr stages)))))
+      "unknown"))
+
 (define (triage-handler forge config event)
   (let* ((repo (event-repo event))
          (st (config-stage config 'triage))
@@ -442,7 +497,8 @@
       (let* ((handlers (list (cons 'triage triage-handler)
                              (cons 'prioritize prioritize-handler)
                              (cons 'code code-handler)
-                             (cons 'review review-handler)))
+                             (cons 'review review-handler)
+                             (cons 'retro retro-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
                   " stage=" (or (decision-stage d) "-")
