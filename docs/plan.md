@@ -36,6 +36,12 @@ promptly and there is still nothing listening on a port.
       PR, Issues write for state comments on the issue), neither with merge
       permission, neither with a webhook URL. Store each private key as a
       repository secret on the target.
+- [ ] **Ecosystem deps installed**: `kaappi-http` and `kaappi-net` are C-FFI
+      libraries, so their built shared object has to be where the FFI loader
+      looks (`~/.kaappi/lib/`) — `--lib-path` alone finds the Scheme and not
+      the `.dylib`, and the failure is `ffi-open: dlopen … relative path not
+      allowed`, which reads like a path bug rather than a missing install.
+      `thottam install` is the flow. Verified absent on the dev machine.
 - [ ] **pi recon** (blocks M3): install pi, pin the version, capture its
       real `--rpc` frame schema into `docs/pi-rpc.md` plus a fixture. Note
       what it needs from filesystem and network — M3's sandbox policy comes
@@ -83,9 +89,21 @@ App registration, since minting a real token is the whole point of it.
       `openssl dgst -sha256 -sign` over `run-process`, input on stdin, key
       as a file path. Tested by verifying the signature back with
       `openssl dgst -verify`.
+
+      **Already proven end-to-end**, which is worth knowing since this was
+      called the riskiest piece: a 2048-bit RS256 JWT minted in Kaappi
+      v0.26.1 this way verifies with `openssl dgst -verify`. Two API details
+      the probe settled — `run-process` returns *multiple values*,
+      `(exit-code stdout stderr)`, so `define-values` is the calling shape,
+      not an alist lookup; and `output:` takes `'string` or `'bytevector`,
+      of which a signature needs `'bytevector` because it is binary.
+      base64url needs no SRFI — plain `quotient`/`modulo` is enough, though
+      `(srfi 151)` is available if the bit operations read better.
 - [ ] `lib/mesthiri/forge.sld` — GitHub REST client over `kaappi-http` +
       `kaappi-json`: issues, comments, labels, pulls, reviews, permission
-      lookup. Credential providers behind one interface: installation token
+      lookup. `http-request` takes `(method url headers body)`, so arbitrary
+      methods and headers are available and `PATCH` needs no helper —
+      checked, because GitHub uses it for issues and labels. Credential providers behind one interface: installation token
       from `jwt.sld` in deployment, PAT locally. Pagination and rate-limit
       handling here and nowhere else.
 - [ ] `lib/mesthiri/log.sld` — every line carries stage, repo and run URL.
