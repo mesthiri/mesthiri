@@ -10,7 +10,8 @@
         (mesthiri config) (mesthiri jwt) (mesthiri forge) (mesthiri event)
         (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
         (mesthiri version) (mesthiri agent) (mesthiri sandbox)
-        (mesthiri harness))
+        (mesthiri harness) (mesthiri triage) (mesthiri labels)
+        (mesthiri sweep))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -203,18 +204,60 @@
 ;; authorize, mode, idempotency, handler — and is replaced by the real triage
 ;; stage in M4. It is not a separate demo command precisely so that the demo
 ;; exercises the shipped path rather than a bypass of it.
-(define (probe-handler forge config event)
-  (post-comment forge event
-                (string-append "mesthiri reached the triage stage for this event ("
-                               (symbol->string (event-kind event))
-                               "). No stage is implemented yet — this is the M2 "
-                               "dispatch probe.")))
+;; The triage stage, replacing M2's probe. The agent is spawned by agent.sld
+;; and nothing else; this hands triage a runner rather than a process.
+(define (fetch-rubric forge repo path)
+  ;; The verdict records the rubric's commit SHA, so a rubric change upstream
+  ;; reads as a behaviour change rather than a mystery.
+  (guard (e ((forge-error? e) (values #f #f)))
+    (let* ((r (forge-get forge (string-append "/repos/" repo "/contents/" path)))
+           (sha (let ((x (assoc "sha" r))) (and x (cdr x))))
+           (enc (let ((x (assoc "content" r))) (and x (cdr x)))))
+      (values enc sha))))
+
+(define (agent-runner harness provider-name model workdir trace)
+  (lambda (prompt)
+    (let* ((argv (agent-argv harness provider-name model workdir))
+           (wrapped (or (sandbox-wrap argv workdir
+                                      (string-append workdir "/secrets"))
+                        argv)))
+      (if (not (sandbox-available?))
+          (log-warn "no namespace sandbox on this host: the agent is UNCONTAINED"))
+      (let ((rec (run-agent wrapped prompt 1200
+                            (list (cons 'tokens (harness-budget harness 'tokens))
+                                  (cons 'turns  (harness-budget harness 'turns)))
+                            trace)))
+        (log-info "agent " (run-record-outcome rec)
+                  " turns=" (run-record-turns rec)
+                  " tokens=" (run-record-tokens rec)
+                  " model=" (or (run-record-model rec) "-"))
+        (if (not (eq? (run-record-outcome rec) 'settled))
+            (die "agent run did not settle: " (run-record-outcome rec)))
+        ;; The agent's reply is the last assistant message; parsed and then
+        ;; validated by triage against its schema.
+        (json-read-string (agent-final-text rec))))))
+
+(define (triage-handler forge config event)
+  (let* ((repo (event-repo event))
+         (st (config-stage config 'triage))
+         (mode (stage-mode st))
+         (hn (read-harness ".mesthiri" 'triage))
+         (pname (or (harness-provider hn) (car (config-provider-names config))))
+         (model (harness-model hn))
+         (workdir (or (env "RUNNER_TEMP") "/tmp"))
+         (trace (string-append workdir "/mesthiri-trace-"
+                               (number->string (event-id event)) ".jsonl")))
+    (let-values (((rubric sha) (fetch-rubric forge repo (config-rubric config))))
+      (let ((issue (forge-get forge (string-append "/repos/" repo "/issues/"
+                                                   (number->string (event-number event))))))
+        (triage-issue forge config repo issue rubric sha mode
+                      (agent-runner hn pname model workdir trace))))))
 
 (define (cmd-dispatch args)
   (let ((ev (load-event)))
     (log-context! "dispatch" (event-repo ev) (env "MESTHIRI_RUN_URL"))
     (let-values (((forge cfg) (authed-forge 'reader)))
-      (let* ((handlers (list (cons 'triage probe-handler)))
+      (let* ((handlers (list (cons 'triage triage-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
                   " stage=" (or (decision-stage d) "-")
@@ -231,6 +274,77 @@
   (let ((ev (load-event))
         (cfg (read-config (or (env "MESTHIRI_CONFIG") ".mesthiri/config.scm"))))
     (explain-event cfg ev)))
+
+;; --- the model, called directly ------------------------------------------
+;;
+;; Used by `try` only. It calls a model over HTTP with no agent subprocess:
+;; verifying an issue's claims needs tools against attacker-writable text,
+;; which belongs in a sandbox on a runner rather than on someone's laptop.
+;; So `try` answers the narrower question honestly — does this rubric produce
+;; sane priorities — and says in its output that claims are unverified.
+(define (model-call provider model prompt)
+  (let* ((key (or (env (symbol->string (provider-key-env provider)))
+                  (die "no key in the environment: "
+                       (symbol->string (provider-key-env provider)))))
+         (url (string-append (trim-slash (provider-endpoint provider))
+                             "/chat/completions"))
+         (body (json-write-string
+                (list (cons "model" model)
+                      (cons "messages"
+                            (list (list (cons "role" "user")
+                                        (cons "content" prompt))))))))
+    (let-values (((status headers resp) (http-transport "POST" url
+                    (list (cons "Content-Type" "application/json")
+                          (cons "Authorization" (string-append "Bearer " key)))
+                    body)))
+      (if (>= status 400) (die "model call failed with " status ": " resp))
+      (let* ((parsed (json-read-string resp))
+             (choices (cdr (assoc "choices" parsed)))
+             (msg (cdr (assoc "message" (car choices)))))
+        (cdr (assoc "content" msg))))))
+
+(define (trim-slash s)
+  (let ((n (string-length s)))
+    (if (and (> n 0) (char=? (string-ref s (- n 1)) #\/))
+        (substring s 0 (- n 1)) s)))
+
+;; --- try ------------------------------------------------------------------
+(define (cmd-try args)
+  (let* ((repo (if (pair? args) (car args) (die "usage: mesthiri try <owner/repo>")))
+         (rubric-path (or (arg-after args "--rubric") ".mesthiri/rubric.md"))
+         (cfg (read-config (or (env "MESTHIRI_CONFIG") ".mesthiri/config.scm")))
+         (pat (or (env "GITHUB_TOKEN") (env "GH_TOKEN")
+                  (die "set GITHUB_TOKEN: try reads issues with a personal token")))
+         (hn (read-harness ".mesthiri" 'triage))
+         (pname (or (harness-provider hn) (car (config-provider-names cfg))))
+         (provider (config-provider cfg pname))
+         (model (or (harness-model hn) (die "no model in the triage harness")))
+         (f (make-forge http-transport)))
+    (forge-auth! f (bearer pat))
+    (display "mesthiri try — rubric only, nothing written, no checkout\n")
+    (display "  provider ") (display pname)
+    (display "  model ") (display model) (newline) (newline)
+    (let* ((rubric (guard (e (#t "(no rubric found)"))
+                     (call-with-input-file rubric-path
+                       (lambda (p) (let loop ((acc ""))
+                                     (let ((l (read-line p)))
+                                       (if (eof-object? l) acc
+                                           (loop (string-append acc l "\n")))))))))
+           (issues (untriaged-issues f repo)))
+      (for-each
+       (lambda (i)
+         (let* ((n (cdr (assoc "number" i)))
+                (title (let ((t (assoc "title" i))) (and t (cdr t))))
+                (body  (let ((b (assoc "body" i))) (and b (cdr b))))
+                (out (model-call provider model
+                                 (triage-prompt rubric title body))))
+           (display "#") (display n) (display "  ") (display title) (newline)
+           (display "      ") (display out) (newline)
+           (display "      (claims NOT verified — try does not check out the code)")
+           (newline) (newline)))
+       issues)
+      (display (number->string (length issues)))
+      (display " issues read, 0 writes.\n"))))
 
 ;; --- agent-smoke ---------------------------------------------------------
 ;;
@@ -296,6 +410,10 @@
   (display "  explain-event\n")
   (display "      Print the normalized event and how each stage trigger matched.\n")
   (display "      The first thing to run when a stage did nothing and said nothing.\n\n")
+  (display "  try <owner/repo> [--rubric <path>]\n")
+  (display "      Apply the rubric to open issues and print the result.\n")
+  (display "      Writes nothing, clones nothing, and says so: it cannot\n")
+  (display "      verify claims, which is what installed triage does.\n\n")
   (display "  agent-smoke [--prove-sandbox]\n")
   (display "      Report the sandbox and the derived egress allowlist.\n")
   (display "      --prove-sandbox asserts the boundary instead of describing it.\n\n")
@@ -328,4 +446,5 @@
         ((string=? (car args) "dispatch") (cmd-dispatch (cdr args)))
         ((string=? (car args) "explain-event") (cmd-explain (cdr args)))
         ((string=? (car args) "agent-smoke") (cmd-agent-smoke (cdr args)))
+        ((string=? (car args) "try") (cmd-try (cdr args)))
         (else (usage))))

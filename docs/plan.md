@@ -250,28 +250,28 @@ proceeding quietly.
 
 ## M4 — Triage and workflow labels
 
-- [ ] `lib/mesthiri/labels.sld` — the state machine: declared legal
+- [x] `lib/mesthiri/labels.sld` — the state machine: declared legal
       transitions, mutual exclusion, write-then-read-back, and the
       clear-downstream-on-new-commit rule. Label definitions ship in the
       M9 install pull request; dispatch applies `ready-for-triage` on
       issue open, and the M4 sweep backstops unlabeled or updated issues.
-- [ ] `lib/mesthiri/triage.sld` — verify the issue's claims against a
+- [x] `lib/mesthiri/triage.sld` — verify the issue's claims against a
       checkout using the M3 agent, classify per the rubric read from the
       target repo at its configured path, propose exactly one `priority:`
       label and an intent tier (the tier lives in the verdict and run
       record, never as a label), comment the rationale, record the
       rubric's commit SHA in the verdict.
-- [ ] Stage `mode` — `off` | `dry-run` | `live`, defaulting to **off**.
+- [x] Stage `mode` — `off` | `dry-run` | `live`, defaulting to **off**.
       A freshly installed repo has triage in dry-run and everything else
       off; merging an install pull request must not start opening real
       ones. The code stage also carries `max-tier`, default 0.
-- [ ] Red-team fixture from day one: an issue whose body tries to instruct
+- [x] Red-team fixture from day one: an issue whose body tries to instruct
       the agent, asserted to change no verdict.
-- [ ] The scheduled sweep, finding its work by **querying the forge for
+- [x] The scheduled sweep, finding its work by **querying the forge for
       labels and update times** rather than keeping a cursor. Labels are the
       watermark; mesthiri stores nothing a human cannot see in the repo.
 
-- [ ] `mesthiri try <owner/repo>` — apply the rubric to open issues from a
+- [x] `mesthiri try <owner/repo>` — apply the rubric to open issues from a
       PAT and print the result, writing nothing and cloning nothing. It
       calls a model **directly, with no agent subprocess**: verifying an
       issue's claims needs tools against attacker-writable text, which

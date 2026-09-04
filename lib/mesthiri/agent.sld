@@ -29,7 +29,8 @@
           run-record-model run-record-frames
           fold-frames budget-exceeded?
           validate-output output-error? output-error-message
-          run-agent write-trace)
+          run-agent write-trace agent-final-text
+          run-record-text)
   (begin
 
     ;; --- spawn arguments ---------------------------------------------------
@@ -79,38 +80,60 @@
                  (and tt (cdr tt))))))
 
     (define-record-type <run-record>
-      (make-run-record outcome turns tokens model frames)
+      (make-run-record outcome turns tokens model frames text)
       run-record?
       (outcome run-record-outcome)
       (turns   run-record-turns)
       (tokens  run-record-tokens)
       (model   run-record-model)
-      (frames  run-record-frames))
+      (frames  run-record-frames)
+      ;; The agent's answer, carried on the record rather than in module
+      ;; state: two runs in one process would otherwise share it, and the
+      ;; second would silently inherit the first's reply.
+      (text    run-record-text))
 
     ;; Fold a frame stream into a run record. Pure, so the whole accounting
     ;; path is tested against the recorded fixture without spawning anything.
     (define (fold-frames frames budget)
-      (let loop ((f frames) (turns 0) (tokens 0) (model #f) (n 0) (outcome 'incomplete))
+      (let loop ((f frames) (turns 0) (tokens 0) (model #f) (text #f)
+                 (n 0) (outcome 'incomplete))
         (cond
-         ((null? f) (make-run-record outcome turns tokens model n))
+         ((null? f) (make-run-record outcome turns tokens model n text))
          (else
           (let* ((fr (car f))
                  (t  (frame-type fr))
                  (turns (if (equal? t "turn_start") (+ turns 1) turns))
                  (u (frame-usage fr))
                  (tokens (if u u tokens))
+                 (text (or (frame-text fr) text))
                  (model (or model (frame-model fr))))
             (cond
              ((budget-exceeded? budget turns tokens)
-              (make-run-record 'over-budget turns tokens model (+ n 1)))
+              (make-run-record 'over-budget turns tokens model (+ n 1) text))
              ((terminal-frame? fr)
-              (make-run-record 'settled turns tokens model (+ n 1)))
-             (else (loop (cdr f) turns tokens model (+ n 1) outcome))))))))
+              (make-run-record 'settled turns tokens model (+ n 1) text))
+             (else (loop (cdr f) turns tokens model text (+ n 1) outcome))))))))
 
     ;; turn_end's message carries the model that actually ran, which is what
     ;; the Generated-by trailer should record — taking it from here rather
     ;; than from config means the trailer names what ran, not what was asked
     ;; for.
+    ;; The agent's answer is the text of the last assistant message. Pulled
+    ;; from turn_end's message rather than reassembled from message_update
+    ;; deltas, which are incremental and would need reassembly to say the
+    ;; same thing.
+    (define (agent-final-text rec)
+      (or (run-record-text rec)
+          (raise (make-output-error
+                  "the agent settled without producing any text"))))
+
+    ;; The text of a frame's message, or #f. Threaded through the folds.
+    (define (frame-text f)
+      (let ((m (assoc "message" f)))
+        (and m (pair? (cdr m))
+             (let ((c (assoc "content" (cdr m))))
+               (and c (string? (cdr c)) (> (string-length (cdr c)) 0) (cdr c))))))
+
     (define (frame-model f)
       (let ((m (assoc "message" f)))
         (and m (pair? (cdr m))
@@ -179,11 +202,11 @@
                                (cons "message" prompt))) in)
           (write-string "\n" in)
           (flush-output-port in)
-          (let loop ((frames '()) (turns 0) (tokens 0) (model #f))
+          (let loop ((frames '()) (turns 0) (tokens 0) (model #f) (text #f))
             (let ((line (read-line out)))
               (cond
                ((eof-object? line)
-                (finish proc frames turns tokens model 'eof trace-path))
+                (finish proc frames turns tokens model text 'eof trace-path))
                (else
                 (let* ((fr (guard (e (#t #f)) (json-read-string line)))
                        (frames (if fr (cons fr frames) frames))
@@ -191,19 +214,20 @@
                                   (+ turns 1) turns))
                        (u (and fr (frame-usage fr)))
                        (tokens (or u tokens))
+                       (text (or (and fr (frame-text fr)) text))
                        (model (or model (and fr (frame-model fr)))))
                   (cond
                    ((budget-exceeded? budget turns tokens)
                     (process-kill proc 'group: #t)
-                    (finish proc frames turns tokens model 'over-budget trace-path))
+                    (finish proc frames turns tokens model text 'over-budget trace-path))
                    ((and fr (terminal-frame? fr))
-                    (finish proc frames turns tokens model 'settled trace-path))
-                   (else (loop frames turns tokens model)))))))))))
+                    (finish proc frames turns tokens model text 'settled trace-path))
+                   (else (loop frames turns tokens model text)))))))))))
 
-    (define (finish proc frames turns tokens model outcome trace-path)
+    (define (finish proc frames turns tokens model text outcome trace-path)
       (guard (e (#t #f)) (process-kill proc 'group: #t))
       (if trace-path (write-trace trace-path (reverse frames)))
-      (make-run-record outcome turns tokens model (length frames)))
+      (make-run-record outcome turns tokens model (length frames) text))
 
     ;; The trace is the run record plus the per-turn detail retro reads. It is
     ;; a CI artifact rather than a database row, and retention is CI's.

@@ -76,6 +76,15 @@
        (run-record-outcome
         (fold-frames (append (list (list (cons "type" "brand_new_frame"))) frames) #f)))
 
+;; The answer must come off the record, not from module state: two runs in
+;; one process would otherwise share it and the second inherit the first.
+(check "the agent's text is carried on the run record"
+       #t (string? (agent-final-text (fold-frames frames #f))))
+(check "a run with no text says so rather than returning stale text"
+       #t (guard (e ((output-error? e) #t))
+            (agent-final-text (fold-frames (list (list (cons "type" "agent_settled"))) #f))
+            #f))
+
 ;; --- output validation, outside the agent -------------------------------
 (define schema '(("priority" . string) ("tier" . number) ("rationale" . string)))
 (define good '(("priority" . "high") ("tier" . 1) ("rationale" . "reproduced")))
