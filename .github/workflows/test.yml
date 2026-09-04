@@ -80,3 +80,59 @@ jobs:
       - run: ./tests/run-all.sh
         env:
           MESTHIRI_LIBS: ../kaappi-json/lib
+
+  # The macOS leg of the same suite (#5). A second job and not a matrix on
+  # purpose: a matrix renames the legs to `suite (ubuntu-latest)` and
+  # `suite (macos-latest)`, the plain `suite` context that branch protection
+  # requires would never report again, and every merge would be back to
+  # needing --admin — the failure #5 was filed about.
+  #
+  # Why a second platform at all: the pinned kaappi v0.26.1 Linux binary
+  # refuses spawn-process directory: on every Linux host (kaappi#2517), so
+  # the ubuntu leg can only exercise the /bin/sh fallback live. macOS
+  # honours directory:, so this leg is where the primary spawn path runs
+  # against a real pi. When kaappi#2517 ships and KAAPPI_VERSION is bumped,
+  # both legs run the primary path and the fallback keeps its unit checks on
+  # every platform (tests/test-agent.scm runs the script for real).
+  #
+  # Not added to required checks: it has never run green on main yet, and a
+  # required context that has never reported blocks merges exactly like a
+  # failing one. Require it from branch protection once it has.
+  suite-macos:
+    runs-on: macos-latest   # arm64; the artifact below is pinned to match
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the pinned kaappi binary
+        run: |
+          set -euo pipefail
+          curl -fsSL -o kaappi \
+            "https://github.com/kaappi/kaappi/releases/download/${KAAPPI_VERSION}/kaappi-aarch64-macos"
+          chmod +x kaappi
+          sudo mv kaappi /usr/local/bin/kaappi
+          kaappi --version
+
+      - name: Fetch kaappi-json
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/kaappi/kaappi-json ../kaappi-json
+
+      # The jwt tests sign through this; runners ship LibreSSL, whose dgst
+      # and base64 cover everything they call.
+      - name: Check openssl is present
+        run: openssl version
+
+      - name: Install pi
+        run: |
+          set -euo pipefail
+          npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
+          pi --version
+
+      # No sandbox step: bwrap is Linux-only by design, and the suite says
+      # so loudly on this platform rather than failing (test-sandbox.scm
+      # asserts the refusal reason when the sandbox is absent). This leg
+      # runs tests, not jobs — no mesthiri stage runs here, and the live
+      # test's pi talks to a stub model server on localhost.
+      - run: ./tests/run-all.sh
+        env:
+          MESTHIRI_LIBS: ../kaappi-json/lib

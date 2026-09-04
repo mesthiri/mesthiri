@@ -539,7 +539,9 @@ Uninstall reverses it and leaves no trace but the labels.
 - **Prompt injection**: three layers answer it and none is prompt wording —
   the sandbox bounds what a subverted agent reaches, output validation
   bounds what it says, eligibility bounds what it may attempt.
-- **Containment is Linux-only**, which CI runners are. This bites only
+- **Containment is Linux-only**, which the runners that execute mesthiri
+  jobs are — the macOS leg of the test workflow runs tests, not jobs, so no
+  agent stage runs there. This bites only
   where an agent is spawned: `try` and `install` spawn none, so the macOS
   build is unaffected, but running a stage locally during development does,
   and must say so loudly at startup — a security fallback that fails

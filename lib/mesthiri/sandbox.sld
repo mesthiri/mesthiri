@@ -17,8 +17,10 @@
 ;;; commits and the job pushes; it has no credential and no reason to reach
 ;;; GitHub.
 ;;;
-;;; Linux only, which CI runners are. On macOS there is no namespace sandbox
-;;; and this says so loudly rather than pretending — a security fallback that
+;;; Linux only, which the runners that execute mesthiri jobs are; the macOS
+;;; leg of the test workflow runs tests, not jobs, and its live test drives a
+;;; stub model on localhost. On macOS there is no namespace sandbox and this
+;;; says so loudly rather than pretending — a security fallback that
 ;;; fails silently is worse than none.
 
 (define-library (mesthiri sandbox)
