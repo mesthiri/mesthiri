@@ -45,7 +45,13 @@ promptly and there is still nothing listening on a port.
       code stage's in M6. Its shim workflow is committed **by hand** until
       M9 automates installation — worth saying, because every milestone from
       M2 on quietly depends on a shim existing somewhere.
-- [ ] Org hygiene: DCO app + branch protection on `mesthiri/mesthiri`.
+- [x] Branch protection on `mesthiri/mesthiri`: the `diagrams` check is
+      required, force pushes and deletions blocked, conversation resolution
+      required. Admins are not enforced, so the owner can still push to
+      `main` directly; flip `enforce_admins` when outside contributions
+      start.
+- [ ] DCO app installed on `mesthiri/mesthiri` (human-only) and added to
+      the required checks once it reports.
 - [x] CI for this repo, docs half: `.github/workflows/docs.yml` validates
       every Mermaid block on push and pull request.
 - [ ] CI for this repo, code half: build the binary and run the test suite
