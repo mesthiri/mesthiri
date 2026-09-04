@@ -18,7 +18,8 @@ flowchart LR
   subgraph repo["Target repository"]
     shim["shim workflow<br/>native triggers + schedule"]
     cfg[".mesthiri/<br/>config + harnesses"]
-    secret["App private keys<br/>repo secrets"]
+    appkeys["App private keys<br/>repo secrets"]
+    modelkey["model API key<br/>repo secret"]
   end
 
   subgraph job["Ephemeral CI job — rebuilt every run"]
@@ -39,28 +40,35 @@ flowchart LR
   shim -->|"workflow_call"| reusable["reusable workflow<br/>from mesthiri repo"]
   reusable --> bin
   cfg --> bin
-  secret --> bin
+  appkeys --> bin
+  modelkey -->|"the one credential<br/>that goes inside"| agent
   bin -->|"REST, installation token"| gh["GitHub API"]
-  agent -->|"egress allowlist:<br/>registries, model endpoint"| net["internet"]
+  agent -->|"egress allowlist, derived from<br/>the provider endpoint"| net["model API + registries"]
   agent --x gh
   agent --x tok
 
   classDef danger fill:#fff0f0,stroke:#c33
   classDef safe fill:#f2f8f2,stroke:#396
   class agent,clone danger
-  class bin,tok,secret safe
+  class bin,tok,appkeys safe
 ```
 
 The two crossed edges are the load-bearing ones: **the agent holds no
-credential and has no route to the forge.** The token and key file sit
-outside its mount namespace, and the forge is deliberately absent from its
-egress allowlist.
+*repository* credential and has no route to the forge.** The App keys and
+the installation token sit outside its mount namespace, and the forge is
+deliberately absent from its egress allowlist.
+
+One credential does go in, and the diagram says so rather than implying a
+cleaner boundary than exists: the agent cannot call a model without the
+model API key, so that key — and only that key — is inside. It buys tokens
+from a model provider and grants nothing on the repository, so an agent that
+leaks it costs money rather than code.
 
 | Zone | Trust | Holds |
 |---|---|---|
 | Repository | maintainer-controlled | the shim, `.mesthiri/` policy, App keys as secrets |
-| CI job | trusted for the run | the binary, the installation token, every forge call |
-| Sandbox | untrusted | the agent and the clone it may write |
+| CI job | trusted for the run | the binary, the App keys, the installation token, every forge call |
+| Sandbox | untrusted | the agent, the clone it may write, and the model API key |
 | Issue and PR text | hostile input | authored by anyone who can comment |
 
 ## 2. The dispatch path
@@ -83,10 +91,17 @@ flowchart TD
   authz -->|"yes"| dedupe{"already acted<br/>on this event id?"}
   dedupe -->|"yes"| drop["exit, idempotent"]
   dedupe -->|"no"| match["match trigger predicates<br/>interpreted, never eval'd"]
-  match --> elig{"for a writing stage:<br/>intent tier + path denylist"}
+  match --> mode{"stage mode?<br/>default is off"}
+  mode -->|"off"| skip["exit, stage disabled"]
+  mode -->|"dry-run or live"| elig{"for a writing stage:<br/>intent tier + max-tier + denylist"}
   elig -->|"no"| esc["needs-human"]
-  elig -->|"yes"| stage["run the one matching stage"]
+  elig -->|"yes"| stage["run the one matching stage<br/>dry-run reports, live writes"]
 ```
+
+Every stage defaults to `off`, so "the stage is disabled" is the most
+likely answer to *why did nothing happen* on a fresh install — which is why
+`mesthiri explain-event` prints the mode alongside the predicates it tested,
+rather than only the predicates.
 
 `pull_request_target` is not a detail. A `pull_request`-triggered workflow
 runs the copy of itself from the PR's own branch, so anyone opening a pull
@@ -138,7 +153,7 @@ sequenceDiagram
   participant G as GitHub
 
   W->>S: dispatch, matched to the code stage
-  S->>S: eligibility — intent tier, path denylist
+  S->>S: eligibility — intent tier vs max-tier, path denylist
   S->>G: clone target with the installation token
   S->>A: spawn in sandbox<br/>prompt + issue text marked untrusted
   loop within token and wall-clock budget
@@ -227,6 +242,7 @@ flowchart TD
   subgraph base["foundations"]
     direction LR
     config["config.sld<br/>reads .mesthiri/config.scm"]
+    harness["harness.sld*<br/>shipped defaults<br/>+ repo overrides"]
     logmod["log.sld"]
     jwt["jwt.sld"]
     proc["proc.sld<br/>run/spawn-process"]
@@ -243,12 +259,17 @@ flowchart TD
   stages --> logmod
   seams --> config
 
+  agentmod --> harness
+  harness --> config
+
   classDef prov stroke-dasharray: 4 3
-  class prioritize,codestage,review,fixstage,retro prov
+  class prioritize,codestage,review,fixstage,retro,harness prov
 ```
 
-`*` — dashed modules are stage bodies for M5 onward; their names are
-indicative, since [plan.md](plan.md) has not fixed them yet. There is no
+`*` — dashed modules are named indicatively: the stage bodies for M5 onward,
+and the harness resolver that layers a repo's `.mesthiri/harness/<role>.scm`
+over mesthiri's shipped default. [plan.md](plan.md) has not fixed those
+names yet. There is no
 store module, and no cursor file: state lives in labels and in the forge,
 and scheduled sweeps find their work by querying it.
 
