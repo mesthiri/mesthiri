@@ -5,6 +5,7 @@ execution, rubric location; then agent containment, command surface,
 eligibility policy, output validation). Distilled from the research and design discussion
 that produced [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md);
 this document records the decisions so the repo is self-explaining.
+[architecture.md](architecture.md) draws the same system as diagrams.
 
 ## What mesthiri is
 

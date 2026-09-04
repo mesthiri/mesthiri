@@ -39,6 +39,10 @@ repo covers it.
 
 ## Architecture (one paragraph)
 
+Diagrams — trust zones, the credential boundary, the label state machine —
+are in [docs/architecture.md](docs/architecture.md).
+
+
 A single Kaappi program, compiled to a standalone binary
 (`zig build -Dbundle-src=`), running under systemd on a server. Fibers +
 reactor timers drive the cron stages; a worker fiber drives a headless coding
