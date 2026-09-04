@@ -77,30 +77,30 @@ jobs:
                 --ro-bind / / --proc /proc --dev /dev -- /bin/true
           echo "bubblewrap $(bwrap --version | awk '{print $2}') works"
 
-      # TEMPORARY: v0.1.5's dispatch died with SIGILL on a runner where
-      # v0.1.4 did not, before printing a single log line. Reproduce it on the
-      # image it happened on.
+      # TEMPORARY: v0.1.5's dispatch died with SIGILL where v0.1.4 did not.
       - name: Probe the released binary
+        shell: bash
         run: |
+          set +e
           set -x
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           base="https://github.com/mesthiri/mesthiri/releases/download"
-          mkdir -p ~/.kaappi/lib
-          for v in v0.1.4 v0.1.5; do
-            curl -fsSL -o "m-$v" "$base/$v/mesthiri-x86_64-linux"; chmod +x "m-$v"
-            curl -fsSL -o ~/.kaappi/lib/libkaappi_net.so  "$base/$v/libkaappi_net-x86_64-linux.so"
-            curl -fsSL -o ~/.kaappi/lib/libkaappi_http.so "$base/$v/libkaappi_http-x86_64-linux.so"
-            echo "== $v =="
-            ./"m-$v" --version; echo "version-exit=$?"
-          done
-          mkdir -p probe/.mesthiri/harness && cd probe
-          cp ../.mesthiri/config.scm . 2>/dev/null || true
+          mkdir -p ~/.kaappi/lib probe/.mesthiri/harness
+          cd probe
+          git clone --depth 1 https://github.com/mesthiri/sandbox s
+          cp -r s/.mesthiri/* .mesthiri/
           cat > event.json <<'EOF'
           {"action":"created","issue":{"number":1,"title":"t","body":"b","labels":[],"user":{"login":"x"}},"comment":{"body":"/triage","user":{"login":"x"}},"repository":{"full_name":"mesthiri/sandbox"}}
           EOF
           for v in v0.1.4 v0.1.5; do
-            echo "== dispatch $v (no config: expect a clean config error) =="
+            curl -fsSL -o "m-$v" "$base/$v/mesthiri-x86_64-linux"; chmod +x "m-$v"
+            curl -fsSL -o ~/.kaappi/lib/libkaappi_net.so  "$base/$v/libkaappi_net-x86_64-linux.so"
+            curl -fsSL -o ~/.kaappi/lib/libkaappi_http.so "$base/$v/libkaappi_http-x86_64-linux.so"
+            echo "===== $v ====="
             MESTHIRI_EVENT_NAME=issue_comment MESTHIRI_EVENT_PATH=$PWD/event.json \
-            MESTHIRI_REPO=mesthiri/sandbox CI=true ../"m-$v" dispatch; echo "exit=$?"
+            MESTHIRI_REPO=mesthiri/sandbox CI=true ./"m-$v" dispatch
+            echo "dispatch-exit=$?"
           done
         continue-on-error: true
 
