@@ -18,13 +18,23 @@ topic, `README.md` as its index) is the end-user experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
 was wrong; `README.md` is the public face. Keep all six in sync with
-reality. M0-M9 have landed (`lib/mesthiri/*.sld`, 466 assertions), and
+reality. M0-M9 have landed (`lib/mesthiri/*.sld`, 511 assertions), and
 `run-agent` really does spawn pi — `tests/test-agent-live.scm` drives a live
-process against a stub model server. What has **never** happened is a run
-against a real model, or against a real repository: no key, no adopter. The
-README, the guide and the site's landing page must keep saying so,
-because a reader who takes the guide at face value expects verdicts
-that no one has yet seen mesthiri produce.
+process against a stub model server.
+
+mesthiri has now run against **real models on a real repository**
+(`mesthiri/sandbox`): triage produced verdicts on four issues, code opened
+pull requests, review found real defects on them, and fix consumed those
+findings and pushed. Four stages of six. **`prioritize` and `retro` have
+never run against a real model**, and there is **no adopter outside the
+sandbox**. Every transcript in the guide is still designed, not captured.
+
+The README, the guide and the site's landing page carry that same statement
+and `docs-sync` greps all three, so it moves as one thing. Keep it exact in
+both directions: overclaiming misleads a reader who takes the guide at face
+value, and underclaiming — which this file did for three releases after the
+first live run — is just as wrong and harder to notice, because nobody
+re-reads a caveat to check it is still true.
 
 `AGENTS.md` is a symlink to this file, so tools looking for either name get
 the same instructions. Edit this file, not the link. Note that an

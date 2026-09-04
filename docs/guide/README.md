@@ -1,9 +1,12 @@
 # mesthiri — user guide
 
-> **Nothing here has run for real yet.** Every milestone has landed —
+> **Four of six stages have now run for real.** Every milestone has landed —
 > dispatch, the shim workflow, all six stages, the sandbox — and the test
 > suite drives a live pi process against a stub model server. What has
-> never happened is a run against a real model or a real repository. This
+> since run against real models on a real repository: triage, code, review
+> and fix have all done the job on `mesthiri/sandbox`. What has never
+> happened is a run of `prioritize` or `retro` against a real model, or an
+> adopter outside that sandbox. This
 > guide describes the experience mesthiri is built to deliver, written
 > ahead of the code as a design tool, because a command that reads badly
 > on the page will read worse in a terminal. Every transcript in this

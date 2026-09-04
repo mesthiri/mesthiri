@@ -36,11 +36,18 @@ was accepted as a parameter and never implemented; and the agent's reply was
 read from the wrong shape and the wrong role, so every real run would have
 ended at *settled without producing any text*.
 
-What is still untested is a run against a **real model**, which needs a key
-this repository does not have. The stub proves the protocol and the
-plumbing; it cannot tell you whether a rubric produces good verdicts. Treat
-the milestones as scaffolding that is tested end to end and has never done
-the actual job.
+mesthiri has since run against **real models on a real repository**
+(`mesthiri/sandbox`): triage produced verdicts on four issues, code opened
+pull requests, review found real defects on them — including one the test
+suite could not catch — and fix consumed those findings and pushed. Doing it
+found more defects than the whole test suite had: a `/fix` that parsed and
+was answered with silence, a review that never fired on a newly opened pull
+request, comments missing the marker that made a no-op job evict a human's
+queued command.
+
+What has **not** happened: `prioritize` and `retro` have never run against a
+real model, and there is no adopter outside the sandbox. Every transcript in
+the guide is designed, not captured.
 
 The project's subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
