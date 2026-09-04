@@ -68,6 +68,7 @@
 ;; ships kernel.apparmor_restrict_unprivileged_userns=1, under which bwrap is
 ;; present, executable, and fails at `setting up uid map: Permission denied`.
 (define wd "/tmp/mesthiri-sandbox-test/work")
+(define scratch "/tmp/mesthiri-sandbox-test/scratch")
 (define outside "/tmp/mesthiri-sandbox-test/outside.txt")
 
 ;; True when the command could NOT do the thing — which is the passing case.
@@ -83,6 +84,7 @@
   (display "  namespaces. Nothing below ran.\n\n"))
  (else
   (proc-run (list "mkdir" "-p" (string-append wd "/secrets")))
+  (proc-run (list "mkdir" "-p" scratch))
   (call-with-output-file outside (lambda (p) (display "a job secret" p)))
 
   ;; The baseline matters as much as the assertions: without it a wrap that
@@ -95,6 +97,22 @@
   ;; What it is for.
   (check "a file outside the workdir cannot be written"
          #t (blocked? (list "/usr/bin/touch" "/tmp/mesthiri-sandbox-test/nope")))
+
+  ;; The agent needs a writable HOME that is NOT the clone: pi keeps state
+  ;; there, and anything in the clone ends up in a pull request. Two writable
+  ;; mounts, for two purposes. Without the second, pi refuses at startup with
+  ;; "EROFS: read-only file system, open '…/.pi/agent/auth.json'".
+  (check "the scratch is writable when it is bound"
+         #f (let ((wrapped (sandbox-wrap (list "/usr/bin/touch"
+                                               (string-append scratch "/w"))
+                                         wd (string-append wd "/secrets")
+                                         scratch)))
+              (and wrapped (guard (e (#t #t)) (proc-run wrapped) #f))))
+  (check "and not writable when it is not"
+         #t (let ((wrapped (sandbox-wrap (list "/usr/bin/touch"
+                                               (string-append scratch "/x"))
+                                         wd (string-append wd "/secrets"))))
+              (and wrapped (guard (e (#t #t)) (proc-run wrapped) #f))))
   (check "the secrets directory is empty inside, whatever is in it outside"
          #t (blocked? (list "/bin/cat" (string-append wd "/secrets/key.pem"))))))
 

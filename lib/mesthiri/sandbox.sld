@@ -139,7 +139,16 @@
     ;; Returns the argv that runs `inner-argv` contained. When no sandbox is
     ;; available the caller gets #f and must decide — `agent.sld` refuses in
     ;; CI and warns loudly elsewhere, rather than silently running unconfined.
-    (define (sandbox-wrap inner-argv workdir secrets-dir)
+    ;; `scratch` is the agent's own writable area — its HOME, where pi keeps
+    ;; the provider catalogue mesthiri writes and whatever state it needs.
+    ;; It has to be bound writable and it must NOT be the workdir: the workdir
+    ;; is the clone the code stage commits, so anything the agent writes there
+    ;; ends up in a pull request. Two writable mounts, for two purposes.
+    ;;
+    ;; Omitting it is how this was found — HOME moved out of the clone, landed
+    ;; under a read-only bind, and pi refused with "EROFS: read-only file
+    ;; system, open '…/.pi/agent/auth.json'".
+    (define (sandbox-wrap inner-argv workdir secrets-dir . opts)
       (and (sandbox-available?)
            (append
             (list "/usr/bin/bwrap"
@@ -155,7 +164,7 @@
                   "--die-with-parent"
                   "--new-session"
                   "--ro-bind" "/" "/"
-                  ;; the one writable place, and the only thing left behind
+                  ;; the clone, which is what the job will commit
                   "--bind" workdir workdir
                   ;; the secrets directory is not mounted at all: unreachable
                   ;; rather than unreadable
@@ -163,4 +172,7 @@
                   "--proc" "/proc"
                   "--dev" "/dev"
                   "--chdir" workdir)
+            (if (and (pair? opts) (car opts))
+                (list "--bind" (car opts) (car opts))
+                '())
             inner-argv)))))

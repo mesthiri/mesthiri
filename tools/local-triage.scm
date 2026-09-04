@@ -71,7 +71,7 @@
      (render-models-json cfg (list (cons pname model))))))
 
 (define argv (agent-argv hn (if stub 'stub pname) (if stub "stub-1" model)))
-(define wrapped (or (sandbox-wrap argv clone (string-append clone "/secrets")) argv))
+(define wrapped (or (sandbox-wrap argv clone (string-append clone "/secrets") scratch) argv))
 (log-context! "local-triage" "mesthiri/sandbox" "-")
 (if (not (sandbox-available?))
     (log-warn "UNCONTAINED: " (sandbox-unavailable-reason)))

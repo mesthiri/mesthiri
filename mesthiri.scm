@@ -242,7 +242,8 @@
            (stderr-path (string-append scratch "/agent-stderr.log"))
            (argv (agent-argv harness provider-name model))
            (wrapped (or (sandbox-wrap argv workdir
-                                      (string-append workdir "/secrets"))
+                                      (string-append workdir "/secrets")
+                                      scratch)
                         argv)))
       ;; Fail closed in CI. A warning was the old behaviour and it was wrong:
       ;; the run continued, the agent was uncontained, and the only trace was
