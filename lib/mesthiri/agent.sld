@@ -40,13 +40,15 @@
 
     ;; --- spawn arguments ---------------------------------------------------
 
-    ;; No workdir here: the working directory is set by `run-agent` through
-    ;; `directory:`, not by anything in argv. This procedure used to take a
-    ;; `workdir` and ignore it, which reads exactly like it handles the
-    ;; question — and the only thing actually setting a directory was
-    ;; bwrap's `--chdir`. So an uncontained run inherited whatever
-    ;; directory mesthiri was launched from: on a laptop, the operator's
-    ;; own checkout, with the agent's write tools pointed at it.
+    ;; No workdir here: the working directory is set by `run-agent`, never
+    ;; by anything `agent-argv` builds — through `directory:` where this
+    ;; kaappi build honours it, and otherwise as the fixed script's first
+    ;; positional parameter. This procedure used to take a `workdir` and
+    ;; ignore it, which reads exactly like it handles the question — and
+    ;; the only thing actually setting a directory was bwrap's `--chdir`.
+    ;; So an uncontained run inherited whatever directory mesthiri was
+    ;; launched from: on a laptop, the operator's own checkout, with the
+    ;; agent's write tools pointed at it.
     (define (agent-argv harness provider-name model)
       (append
        (list "pi" "--mode" "rpc"
@@ -382,40 +384,47 @@
 
     ;; Any failure at all — the refusal on unsupported targets, or a host
     ;; without /usr/bin/true — selects the fallback, because the fallback is
-    ;; correct wherever /bin/sh is and telling the causes apart would buy
-    ;; nothing. The refusal is raised before any child exists, so the guard
-    ;; leaves nothing to clean up.
+    ;; correct wherever /bin/sh is. The refusal is raised before any child
+    ;; exists, so the guard leaves nothing to clean up, and the warning
+    ;; carries the raise's own words rather than a diagnosis: on the
+    ;; gnu.2.28 build they are `directory: is not supported on this
+    ;; platform`, which is what a reader wants next to kaappi#2517 — and a
+    ;; probe failure with some other cause is logged as that cause, not
+    ;; blamed on kaappi.
     (define (directory-spawn-supported?)
       (if (eq? spawn-directory-mode 'unknown)
-          (begin
-            (set! spawn-directory-mode
-                  (guard (e (#t #f))
-                    (let ((p (spawn-process (list "/usr/bin/true")
-                                            'directory: "/")))
-                      (process-wait p)
-                      #t)))
-            (if (not spawn-directory-mode)
-                (log-warn "this kaappi build cannot honour spawn-process"
-                          " directory:; the agent runs through /bin/sh"))))
-      spawn-directory-mode)
+          (set! spawn-directory-mode
+                (guard (e (#t (log-warn "spawn-process directory: unavailable ("
+                                        (if (error-object? e)
+                                            (error-object-message e)
+                                            e)
+                                        "); the agent runs through /bin/sh")
+                          #f))
+                  (let ((p (spawn-process (list "/usr/bin/true")
+                                          'directory: "/")))
+                    (process-wait p)
+                    #t)))
+      spawn-directory-mode))
 
     ;; The argv that runs `argv` in `workdir` without `directory:`:
     ;;
-    ;;     /bin/sh -c 'cd "$1" && shift && exec "$@"' mesthiri <workdir> <argv…>
+    ;;     /bin/sh -c 'cd -- "$1" && shift && exec "$@"' mesthiri <workdir> <argv…>
     ;;
     ;; The script text is a constant, and that is the whole safety argument:
     ;; everything variable — the workdir and every argv element — travels as
     ;; a separate positional parameter, which `"$@"` hands to exec as one
-    ;; verbatim word each, so the shell never parses a word of it. Provider
-    ;; and model names come from the target's config, which mesthiri does
-    ;; not trust; through this argv they are as inert as through a direct
-    ;; spawn. `exec` replaces the shell, so the pid, the group `new-group:`
-    ;; created and the deadline's group kill all still address the agent
-    ;; itself. A workdir that does not exist fails `cd`; sh's message lands
-    ;; in the stderr log and the run ends at eof with it.
+    ;; verbatim word each, so the shell never parses a word of it. The `--`
+    ;; closes `cd`'s option parsing too, so even a workdir beginning with
+    ;; `-` is a path and nothing variable is left for the shell to
+    ;; interpret. Provider and model names come from the target's config,
+    ;; which mesthiri does not trust; through this argv they are as inert as
+    ;; through a direct spawn. `exec` replaces the shell, so the pid, the
+    ;; group `new-group:` created and the deadline's group kill all still
+    ;; address the agent itself. A workdir that does not exist fails `cd`;
+    ;; sh's message lands in the stderr log and the run ends at eof with it.
     (define (argv-in-directory argv workdir)
       (append (list "/bin/sh" "-c"
-                    "cd \"$1\" && shift && exec \"$@\""
+                    "cd -- \"$1\" && shift && exec \"$@\""
                     "mesthiri" workdir)
               argv))
 

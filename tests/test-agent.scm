@@ -52,7 +52,7 @@
 ;; never used — and a construction check alone would not notice a shell
 ;; re-splitting words behind it.
 (check "the fallback argv is the fixed script with workdir and argv as parameters"
-       '("/bin/sh" "-c" "cd \"$1\" && shift && exec \"$@\""
+       '("/bin/sh" "-c" "cd -- \"$1\" && shift && exec \"$@\""
          "mesthiri" "/" "/bin/pwd")
        (argv-in-directory '("/bin/pwd") "/"))
 (check "the fallback really runs the argv in the workdir"
@@ -64,13 +64,16 @@
          line))
 ;; Model names come from the target's config, so a word full of shell
 ;; metacharacters must arrive as one word, neither split nor executed: it is
-;; a positional parameter throughout and the shell never parses it.
+;; a positional parameter throughout and the shell never parses it. The
+;; substitution payloads print a marker rather than doing anything — a
+;; destructive probe (`$(reboot)`) proves its property only on the day the
+;; guarantee breaks, and on that day the proof itself is the incident.
 (check "argv words pass through the shell verbatim"
-       "two  words; $(reboot) `id` 'quoted' \"double\""
+       "two  words; $(echo INJECTED) `echo INJECTED` 'quoted' \"double\""
        (let* ((p (apply spawn-process
                         (argv-in-directory
                          (list "/usr/bin/printf" "%s"
-                               "two  words; $(reboot) `id` 'quoted' \"double\"")
+                               "two  words; $(echo INJECTED) `echo INJECTED` 'quoted' \"double\"")
                          "/")
                         (list 'stdout: 'pipe)))
               (line (read-line (process-stdout p))))
