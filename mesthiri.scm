@@ -574,7 +574,8 @@
               (post-comment forge event
                             "Nothing to fix: no review findings on this pull request.")
               (log-info "fix: no findings"))
-            (run-fix-stage forge config event repo number mode findings)))))))
+            (run-fix-stage forge config event repo number mode findings
+                           (pr-head-ref pr))))))))
 
 ;; The review's own comments, recognised by the heading it writes. A
 ;; dimension that found nothing says so in the same shape, and is dropped
@@ -596,11 +597,10 @@
                        (cons body acc)
                        acc)))))))
 
-(define (run-fix-stage forge config event repo number mode findings)
+(define (run-fix-stage forge config event repo number mode findings branch)
   (let* ((hn (read-harness ".mesthiri" 'code))
          (pname (or (harness-provider hn) (car (config-provider-names config))))
          (model (harness-model hn))
-         (branch (branch-name-for number))
          (workdir (string-append (or (env "RUNNER_TEMP") "/tmp")
                                  "/mesthiri-fix-" (number->string number)))
          (trace (string-append (or (env "RUNNER_TEMP") "/tmp")

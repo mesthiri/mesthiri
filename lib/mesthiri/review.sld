@@ -19,7 +19,7 @@
           (mesthiri agent) (mesthiri forge) (mesthiri log))
   (export review-dimensions dimension-prompt refutation-prompt
           finding-schema refutation-schema
-          mesthiri-authored? findings->comment survives-refutation?
+          mesthiri-authored? pr-head-ref findings->comment survives-refutation?
           review-diff-limit)
   (begin
 
@@ -92,6 +92,19 @@
     ;; fires for fork pull requests too, so reviewing everything would let
     ;; anyone who can open one spend the repository's budget — the per-day cap
     ;; is approximate and is not a defence.
+    ;; The branch a pull request actually lives on, never one derived from
+    ;; its number. `branch-name-for` builds a branch from an ISSUE number,
+    ;; and a pull request's number is not its issue's: PR #10 fixed issue #9
+    ;; and lived on `mesthiri/issue-9`. Fix computed the branch from 10,
+    ;; asked git to clone a branch that does not exist, and died in under
+    ;; three seconds with a bare "runtime error" before any agent started.
+    (define (pr-head-ref pr)
+      (let* ((h (assoc "head" pr))
+             (r (and h (pair? (cdr h)) (assoc "ref" (cdr h)))))
+        (if (and r (string? (cdr r)))
+            (cdr r)
+            (error "the pull request has no head ref"))))
+
     (define (mesthiri-authored? pr)
       (let ((u (assoc "user" pr)))
         (and u (let ((l (assoc "login" (cdr u))))

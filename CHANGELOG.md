@@ -9,6 +9,22 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.15] — 2026-09-04
+
+### Fixed
+
+- **Fix cloned the wrong branch.** It derived the branch from the pull
+  request's number via `branch-name-for`, which builds a branch from an
+  *issue* number — and a pull request's number is not its issue's. PR #10
+  fixed issue #9 and lived on `mesthiri/issue-9`; fix asked git for
+  `mesthiri/issue-10`, and the run died in under three seconds with a bare
+  `runtime error` before any agent started. The branch now comes from the
+  pull request's own head ref.
+
+  `pr-head-ref` lives in `(mesthiri review)` rather than in `mesthiri.scm`,
+  because the entry point is where no test can reach: this bug shipped in
+  0.1.13 with a full green suite.
+
 ## [0.1.14] — 2026-09-04
 
 ### Fixed

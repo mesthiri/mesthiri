@@ -79,6 +79,25 @@
 (check "the fix prompt allows disagreement but not silence"
        #t (has? (fix-prompt "f" "d" "t") "Disagreeing is allowed; ignoring is not"))
 
+
+;; The branch a pull request lives on comes from the pull request.
+;;
+;; `branch-name-for` derives a branch from an ISSUE number, and a pull
+;; request's number is not its issue's — PR #10 fixed issue #9 and lived on
+;; `mesthiri/issue-9`. Fix computed `mesthiri/issue-10`, asked git for a
+;; branch that does not exist, and the run died in under three seconds with
+;; a bare "runtime error" before any agent started. The logic was in
+;; mesthiri.scm, where no test could reach it; that is why it lives here now.
+(check "the head ref comes from the pull request"
+       "mesthiri/issue-9"
+       (pr-head-ref '(("number" . 10)
+                      ("head" . (("ref" . "mesthiri/issue-9"))))))
+
+(check "a pull request with no head ref is an error, not a guess"
+       #t (guard (e (#t #t))
+            (pr-head-ref '(("number" . 10)))
+            #f))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))
