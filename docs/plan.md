@@ -60,8 +60,11 @@ promptly and there is still nothing listening on a port.
       the required checks once it reports.
 - [x] CI for this repo, docs half: `.github/workflows/docs.yml` validates
       every Mermaid block on push and pull request.
-- [ ] CI for this repo, code half: build the binary and run the test suite
-      on push/PR. Waits on there being code to build.
+- [x] CI for this repo, code half: `.github/workflows/test.yml` runs the
+      module suite on push and pull request. Needs no C-FFI library —
+      `forge.sld` takes an injected transport, so only pure-Scheme
+      `kaappi-json` is fetched. Both checks are required in branch
+      protection.
 
 ## M1 — The binary: config, event, forge
 
