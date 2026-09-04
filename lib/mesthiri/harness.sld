@@ -142,7 +142,12 @@
                 (write-string "\n    \"" out)
                 (write-string (symbol->string name) out)
                 (write-string "\": {\n      \"baseUrl\": \"" out)
-                (write-string (provider-endpoint p) out)
+                ;; pi appends "/chat/completions", so a trailing slash in the
+                ;; config becomes a double slash in the request path. Some
+                ;; gateways 404 on that and some do not, which is the worst
+                ;; kind of difference — so the config may end either way and
+                ;; this decides.
+                (write-string (strip-trailing-slash (provider-endpoint p)) out)
                 (write-string "\",\n      \"apiKey\": \"$" out)
                 (write-string (symbol->string (provider-key-env p)) out)
                 (write-string "\",\n      \"api\": \"" out)
@@ -158,6 +163,12 @@
                         (write-string "\"}" out)
                         (mloop (cdr m) #f))))
                 (loop (cdr ps) #f))))))
+
+    (define (strip-trailing-slash s)
+      (let loop ((n (string-length s)))
+        (if (and (> n 1) (char=? (string-ref s (- n 1)) #\/))
+            (loop (- n 1))
+            (substring s 0 n))))
 
     (define (models-for provider roles-and-models)
       (let loop ((r roles-and-models) (acc '()))

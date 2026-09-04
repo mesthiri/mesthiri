@@ -60,6 +60,23 @@ jobs:
           mv libkaappi_net.so libkaappi_http.so ~/.kaappi/lib/
           chmod +x mesthiri
 
+      # mesthiri drives pi; it does not embed it. Without this the binary
+      # downloads cleanly, authorizes the event, matches a stage, and then
+      # fails at the one thing it exists to do.
+      #
+      # Pinned, and the pin is coupled to two things it cannot check from
+      # here: docs/pi-rpc.md records the protocol at this version, and
+      # `(agent (version …))` in a target's config states it. A workflow
+      # cannot parse Scheme, so the coupling is a comment and a release-time
+      # check rather than a mechanism.
+      - name: Install the pinned agent
+        env:
+          PI_VERSION: 0.84.4
+        run: |
+          set -euo pipefail
+          npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
+          pi --version
+
       - name: Dispatch
         env:
           MESTHIRI_READER_KEY: ${{ secrets.reader-key }}

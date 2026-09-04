@@ -73,9 +73,13 @@
         (cons "STUB_API_KEY" "not-a-real-key-and-never-leaves-localhost")
         (cons "NO_COLOR" "1")))
 
+;; The flags agent-argv actually ships, so what is tested is what runs.
+;; `--offline` in particular is worth having here: it says "disable startup
+;; network operations", and whether that also blocks the model call is the
+;; sort of thing to find out from a test rather than from a stalled run.
 (define (pi-argv)
-  (list "pi" "--mode" "rpc" "--no-session" "--no-context-files" "--no-tools"
-        "--provider" "stub" "--model" "stub-1"))
+  (list "pi" "--mode" "rpc" "--no-session" "--no-context-files" "--offline"
+        "--no-tools" "--provider" "stub" "--model" "stub-1"))
 
 (cond
  ((not (have-pi?))

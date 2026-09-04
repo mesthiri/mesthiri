@@ -60,7 +60,13 @@
                             (else (loop (+ i 1)))))))
 (check "both base URLs are rendered"
        #t (and (has? json "https://api.deepseek.com")
-               (has? json "https://api.z.ai/api/paas/v4/")))
+               (has? json "https://api.z.ai/api/paas/v4")))
+;; pi appends "/chat/completions", so a trailing slash — which is how z.ai's
+;; own docs write this endpoint, and how the sandbox's config had it — makes
+;; the request path "…/v4//chat/completions". This assertion used to require
+;; the slash, i.e. it asserted the bug.
+(check "and a trailing slash is stripped rather than passed through"
+       #f (has? json "v4/\""))
 (check "keys are env references, never values"
        #t (and (has? json "\"$DEEPSEEK_API_KEY\"") (has? json "\"$GLM_API_KEY\"")))
 (check "each model lands under its own provider"
@@ -68,5 +74,7 @@
 (check "the api type is carried" #t (has? json "openai-completions"))
 
 (newline)
-(display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
+(display "  ") (display pass) (display " passed, ") (display fail) (display " failed") 
+
+(newline)
 (if (> fail 0) (exit 1) (exit 0))
