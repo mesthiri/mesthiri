@@ -60,6 +60,15 @@
     ;; question for the forge (has mesthiri already replied to this comment
     ;; id), and a test should not need one.
     (define (dispatch forge config event handlers already-handled?)
+      (if (event-own-comment? event)
+          ;; Cheapest possible exit: mesthiri's own comment fired this, and
+          ;; nothing it writes is ever an instruction to itself. Checked
+          ;; before anything is parsed or asked of the forge.
+          (make-decision 'own-comment #f
+                         "this event was caused by mesthiri's own comment" #f)
+          (dispatch-event forge config event handlers already-handled?)))
+
+    (define (dispatch-event forge config event handlers already-handled?)
       (let* ((body  (event-body event))
              (cmds  (if (memq (event-kind event) '(issue-comment))
                         (parse-commands body) '()))

@@ -1,6 +1,6 @@
 (import (scheme base) (scheme write)
         (mesthiri dispatch) (mesthiri config) (mesthiri event)
-        (mesthiri forge) (mesthiri command))
+        (mesthiri forge) (mesthiri command) (mesthiri event))
 
 (define pass 0) (define fail 0)
 (define (check name expected actual)
@@ -101,6 +101,42 @@
 (define _two (dispatch f cfg (ev 'issue-comment "alice" '() "/triage\n/implement")
                        handlers never-handled))
 (check "only the first command runs" 1 (length ran))
+
+;; --- mesthiri's own comments must not dispatch ---------------------------
+;; Every comment mesthiri writes fires an issue_comment event. Left alone it
+;; dispatches, matches nothing and exits — correct but a CI run per comment.
+(define marked (string-append "mesthiri reached the triage stage.\n\n"
+                              marker-prefix "412 -->"))
+
+(check "mesthiri's own comment is suppressed before anything is parsed"
+       'own-comment
+       (decision-outcome
+        (dispatch f cfg (make-event 'issue-comment "o/r" "mesthiri-reader[bot]" 1
+                                    '() marked "" 1 #f #t)
+                  handlers never-handled)))
+
+;; The two signals are both required, and each guards a different mistake.
+(check "a human comment carrying the marker still dispatches"
+       'ran
+       (decision-outcome
+        (dispatch f cfg (make-event 'issue-comment "o/r" "alice" 1 '()
+                                    (string-append "/triage\n" marker-prefix "1 -->")
+                                    "" 1 #f #f)
+                  handlers never-handled)))
+(check "another bot's command is NOT suppressed — authorization is by permission"
+       'unauthorized
+       (decision-outcome
+        (dispatch f cfg (make-event 'issue-comment "o/r" "dependabot[bot]" 1 '()
+                                    "/implement" "" 1 #f #t)
+                  handlers never-handled)))
+;; Labels mesthiri applies must still dispatch, or prioritize could never hand
+;; work to the code stage.
+(check "a label applied by mesthiri still dispatches"
+       'ran
+       (decision-outcome
+        (dispatch f cfg (make-event 'issue-labeled "o/r" "mesthiri-reader[bot]" 1
+                                    '("ready-to-implement") #f "" 1 #f #t)
+                  handlers never-handled)))
 
 ;; --- a malformed trigger is reported, not silently non-matching ----------
 (define bad-cfg

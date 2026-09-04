@@ -19,7 +19,8 @@
   (export make-event event? normalize-event
           event-kind event-repo event-actor event-number event-labels
           event-body event-action event-id event-schedule-tick
-          event-bot? payload-ref)
+          event-bot? payload-ref
+          marker-prefix event-marker event-own-comment?)
   (begin
 
     (define-record-type <event>
@@ -35,6 +36,45 @@
       (id            event-id)            ; for idempotency: comment/delivery id
       (schedule-tick event-schedule-tick) ; "YYYY-MM-DDTHH" of the tick, or #f
       (bot?          event-bot?))         ; did one of mesthiri's Apps act
+
+    ;; mesthiri stamps every comment it writes with this, so it can recognise
+    ;; its own work later. It serves two purposes and they are related: the
+    ;; entry point uses it for idempotency ("have I already replied to this
+    ;; event"), and dispatch uses it to recognise an event *caused by* a
+    ;; comment it wrote.
+    (define marker-prefix "<!-- mesthiri:")
+
+    (define (event-marker event)
+      (string-append marker-prefix
+                     (if (number? (event-id event))
+                         (number->string (event-id event))
+                         "?")
+                     " -->"))
+
+    ;; A comment mesthiri itself posted.
+    ;;
+    ;; Every comment mesthiri writes fires an `issue_comment` event that
+    ;; dispatches, matches nothing, and exits — correct, but a CI run per
+    ;; comment, which with six live stages is noise.
+    ;;
+    ;; Identified by the marker rather than by the author's name, for two
+    ;; reasons. Name matching would need the App slugs, which config does not
+    ;; carry (only the ids). And suppressing every bot would silence a
+    ;; third-party bot that legitimately holds write permission and may issue
+    ;; a command — authorization is by permission here, not by being human.
+    ;; Both signals are required: a bot author *and* mesthiri's own marker.
+    (define (event-own-comment? event)
+      (and (eq? (event-kind event) 'issue-comment)
+           (event-bot? event)
+           (let ((b (event-body event)))
+             (and (string? b) (contains? b marker-prefix)))))
+
+    (define (contains? s sub)
+      (let ((n (string-length s)) (m (string-length sub)))
+        (let loop ((i 0))
+          (cond ((> (+ i m) n) #f)
+                ((string=? (substring s i (+ i m)) sub) #t)
+                (else (loop (+ i 1)))))))
 
     ;; Nested lookup: (payload-ref p "issue" "user" "login")
     (define (payload-ref payload . keys)

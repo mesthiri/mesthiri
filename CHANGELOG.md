@@ -9,6 +9,21 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-09-04
+
+### Fixed
+
+- **A comment from mesthiri no longer costs a CI run.** Every comment it
+  wrote fired an `issue_comment` event that dispatched, matched nothing and
+  exited — correct, but a run per comment, and with six live stages that is
+  noise. Dispatch now recognises its own comments by the marker it already
+  stamps for idempotency and exits before parsing anything.
+
+  Deliberately narrow. A *label* mesthiri applies still dispatches, or
+  prioritize could never hand work to the code stage. And another bot's
+  command is still honoured, because authorization here is by repository
+  permission rather than by being human.
+
 ## [0.1.1] — 2026-09-04
 
 ### Fixed

@@ -155,7 +155,11 @@
 ;; With no database, "have I already acted on this?" is a question for the
 ;; forge: mesthiri leaves an HTML marker in every comment it posts, and finds
 ;; it again by looking.
-(define (marker event) (string-append "<!-- mesthiri:" (number->string (event-id event)) " -->"))
+;; The marker itself lives in (mesthiri event), because dispatch needs it too
+;; — it is how a comment mesthiri wrote is recognised and skipped rather than
+;; dispatched. Two definitions would drift and the symptom would be a run per
+;; comment coming back.
+(define (marker event) (event-marker event))
 
 (define (contains? s sub)
   (and (string? s)
