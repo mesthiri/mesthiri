@@ -401,6 +401,27 @@ the one model key. Everything else is absent, not merely unreadable. This is
 the same discipline as the file layout, applied to the channel the file
 layout does not cover.
 
+**The working directory is set by the spawner, never by the agent's
+argv.** A flag in the agent's argv looks like it answers the question
+and then does not: when one did, the only thing that ever set a
+directory was the sandbox's `--chdir`, so an uncontained run inherited
+mesthiri's own cwd and read the operator's checkout instead of the
+clone it was meant to work in. Where the pinned kaappi honours
+`spawn-process`'s `directory:`, the agent is spawned straight into the
+scratch clone. kaappi's released Linux binary is built against glibc
+2.28 — below the 2.29 that introduced the underlying
+`posix_spawn_file_actions_addchdir_np` — and that check is
+compile-time, so on any Linux host that build refuses `directory:`
+outright
+([kaappi#2517](https://github.com/kaappi/kaappi/issues/2517)). `agent.sld`
+therefore probes once and falls back to a fixed
+`/bin/sh -c 'cd -- "$1" && shift && exec "$@"'`: the script text is a
+constant, and the working directory and every argv word travel as
+positional parameters handed to `exec` verbatim, so no word the target
+repository chose is ever shell-parsed — the same guarantee argv-only
+spawning makes. The shell `exec`s away, so the process group the
+deadline kills is still the agent's.
+
 **The agent writes; the job pushes.** The agent produces commits in its
 clone and exits. The job, outside the sandbox, reads the finished diff,
 checks it against the eligibility rules, and only then pushes and opens the

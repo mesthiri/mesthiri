@@ -5,7 +5,12 @@
 ;;;
 ;;;   - argv only. There is no shell anywhere in mesthiri, because issue and
 ;;;     pull-request text reaches these calls and a shell would make that
-;;;     text executable. `(kaappi process)` has no shell mode; do not add one.
+;;;     text executable. `(kaappi process)` has no shell mode; do not add
+;;;     one. The single exception is `agent.sld`'s FIXED `sh -c` script for
+;;;     kaappi builds that cannot honour `directory:` — its text is a
+;;;     constant and its variable parts are positional parameters, so no
+;;;     word runs through the parser; see the comment there for why that
+;;;     keeps this rule's substance.
 ;;;   - secrets are passed as file paths or on stdin, never as arguments.
 ;;;     Arguments are visible in the process table to anything else on the
 ;;;     machine.

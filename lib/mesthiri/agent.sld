@@ -26,7 +26,8 @@
           (only (srfi 18) thread-sleep!)
           (mesthiri proc)
           (mesthiri config) (mesthiri harness) (mesthiri sandbox) (mesthiri log))
-  (export agent-argv untrusted-block frame-type frame-usage
+  (export agent-argv argv-in-directory directory-spawn-supported?
+          untrusted-block frame-type frame-usage
           terminal-frame? run-record make-run-record
           run-record-turns run-record-tokens run-record-outcome
           run-record-model run-record-frames
@@ -40,13 +41,15 @@
 
     ;; --- spawn arguments ---------------------------------------------------
 
-    ;; No workdir here: the working directory is set by `run-agent` through
-    ;; `directory:`, not by anything in argv. This procedure used to take a
-    ;; `workdir` and ignore it, which reads exactly like it handles the
-    ;; question — and the only thing actually setting a directory was
-    ;; bwrap's `--chdir`. So an uncontained run inherited whatever
-    ;; directory mesthiri was launched from: on a laptop, the operator's
-    ;; own checkout, with the agent's write tools pointed at it.
+    ;; No workdir here: the working directory is set by `run-agent`, never
+    ;; by anything `agent-argv` builds — through `directory:` where this
+    ;; kaappi build honours it, and otherwise as the fixed script's first
+    ;; positional parameter. This procedure used to take a `workdir` and
+    ;; ignore it, which reads exactly like it handles the question — and
+    ;; the only thing actually setting a directory was bwrap's `--chdir`.
+    ;; So an uncontained run inherited whatever directory mesthiri was
+    ;; launched from: on a laptop, the operator's own checkout, with the
+    ;; agent's write tools pointed at it.
     (define (agent-argv harness provider-name model)
       (append
        (list "pi" "--mode" "rpc"
@@ -366,11 +369,84 @@
     ;; that sentence away. Blaming a dependency for a symptom your own error
     ;; handling produced is worth avoiding on its own, and it nearly cost
     ;; kaappi a bug report for something it does well.
+
+    ;; --- the working directory of the spawn --------------------------------
+    ;;
+    ;; `directory:` can only be honoured where libc has
+    ;; posix_spawn_file_actions_addchdir_np. kaappi's released Linux binary
+    ;; is built for x86_64-linux-gnu.2.28 — below glibc 2.29, the first
+    ;; release with that symbol — and the gate is compile-time, so the
+    ;; released binary refuses `directory:` on every Linux host, whatever
+    ;; the host's own glibc (kaappi#2517; asked upstream for a musl
+    ;; artifact or a runtime fallback). macOS, where try and smoke run, is
+    ;; unaffected. Probing once beats asking the platform: a probe tests the
+    ;; binary that is actually pinned, which is the thing that decides.
+    (define spawn-directory-mode 'unknown)
+
+    ;; Any failure at all — the refusal on unsupported targets, or a host
+    ;; without /usr/bin/true — selects the fallback, because the fallback is
+    ;; correct wherever /bin/sh is. The refusal is raised before any child
+    ;; exists, so the guard leaves nothing to clean up, and the warning
+    ;; carries the raise's own words rather than a diagnosis: on the
+    ;; gnu.2.28 build they are `directory: is not supported on this
+    ;; platform`, which is what a reader wants next to kaappi#2517 — and a
+    ;; probe failure with some other cause is logged as that cause, not
+    ;; blamed on kaappi.
+    (define (directory-spawn-supported?)
+      ;; One-armed if on purpose, with the cache read AFTER it as the last
+      ;; expression of the body. Give the if a second arm — or let the set!
+      ;; arm's value become the result — and the first call returns set!'s
+      ;; unspecified value, which kaappi makes truthy: the probe then claims
+      ;; support for a build that refused, exactly the failure this function
+      ;; exists to prevent, and only on the platform without `directory:`,
+      ;; because the truthy-unspecified is indistinguishable from #t on the
+      ;; platform with it. `boolean?` is asserted on it in the suite.
+      (if (eq? spawn-directory-mode 'unknown)
+          (set! spawn-directory-mode
+                (guard (e (#t (log-warn "spawn-process directory: unavailable ("
+                                        (if (error-object? e)
+                                            (error-object-message e)
+                                            e)
+                                        "); the agent runs through /bin/sh")
+                          #f))
+                  (let ((p (spawn-process (list "/usr/bin/true")
+                                          'directory: "/")))
+                    (process-wait p)
+                    #t))))
+      spawn-directory-mode)
+
+    ;; The argv that runs `argv` in `workdir` without `directory:`:
+    ;;
+    ;;     /bin/sh -c 'cd -- "$1" && shift && exec "$@"' mesthiri <workdir> <argv…>
+    ;;
+    ;; The script text is a constant, and that is the whole safety argument:
+    ;; everything variable — the workdir and every argv element — travels as
+    ;; a separate positional parameter, which `"$@"` hands to exec as one
+    ;; verbatim word each, so the shell never parses a word of it. The `--`
+    ;; closes `cd`'s option parsing too, so even a workdir beginning with
+    ;; `-` is a path and nothing variable is left for the shell to
+    ;; interpret. Provider and model names come from the target's config,
+    ;; which mesthiri does not trust; through this argv they are as inert as
+    ;; through a direct spawn. `exec` replaces the shell, so the pid, the
+    ;; group `new-group:` created and the deadline's group kill all still
+    ;; address the agent itself. A workdir that does not exist fails `cd`;
+    ;; sh's message lands in the stderr log and the run ends at eof with it.
+    (define (argv-in-directory argv workdir)
+      (append (list "/bin/sh" "-c"
+                    "cd -- \"$1\" && shift && exec \"$@\""
+                    "mesthiri" workdir)
+              argv))
+
     (define (run-agent argv prompt deadline-secs budget trace-path env
                        stderr-path workdir)
       (let* ((errp (and stderr-path (open-output-file stderr-path)))
+             ;; Where this build cannot honour `directory:`, the same argv
+             ;; runs through the fixed script with the workdir as $1.
+             (dir? (and workdir (directory-spawn-supported?)))
              (proc (apply spawn-process
-                          argv
+                          (if (and workdir (not dir?))
+                              (argv-in-directory argv workdir)
+                              argv)
                           'stdin: 'pipe
                           'stdout: 'pipe
                           'stderr: (if errp errp 'null)
@@ -379,7 +455,7 @@
                            (if env (list 'env: env) '())
                            ;; The agent runs where it was told to, whether
                            ;; or not there is a sandbox to chdir it.
-                           (if workdir (list 'directory: workdir) '())))))
+                           (if dir? (list 'directory: workdir) '())))))
         (let ((in  (process-stdin proc))
               (out (process-stdout proc))
               (timed-out (list #f)))

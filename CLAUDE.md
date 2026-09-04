@@ -121,6 +121,18 @@ symlink and would overwrite everything here.
   your own error handling produced a symptom before attributing it to a
   dependency** — this one nearly cost kaappi a bug report for something it
   does well, and the wrong version had been written down as verified.
+- **`set!` returns an unspecified value, and kaappi's unspecified is
+  truthy.** The dangerous shape is a one-armed `if` that fills a cache
+  and means to read it as the next expression: one missing paren makes
+  the read the `if`'s else-arm, and the first call returns the truthy
+  unspecified instead. It parses, and it passes on every platform where
+  the garbage happens to equal the right answer — `a38c742` did exactly
+  this to the directory probe, macOS stayed green because a truthy
+  unspecified behaves like `#t` there, and only the Linux CI leg caught
+  it (`105ef37` fixes it). A procedure whose value answers a yes/no
+  question asserts its return type on its first call —
+  `(boolean? (directory-spawn-supported?))` — so the day that shape
+  returns, every platform fails, not just the one that pays.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
 - **A kaappi defect goes upstream, not just into a workaround.** File it at
@@ -134,6 +146,16 @@ symlink and would overwrite everything here.
   here — a weak model submitted a library that fails `KP2001` on import,
   the test file's duplicate import made it load on the retry, the suite
   printed "4 passed, 0 failed", and the code stage honestly reported green.
+- **A change that exists because of a platform difference is verified
+  against that platform's pinned artifact before it is pushed.** The
+  `directory:` fallback was reworked on macOS, where its probe succeeds
+  and the path the change exists for never runs; local green and a
+  pushed branch let Linux CI discover what an amd64 container holding
+  the pinned `kaappi-x86_64-linux` would have shown first — which is how
+  the reviewer proved the defect, running the pinned binary where this
+  session only inferred. Green on the development platform is the
+  accident, not the evidence, when the change's subject is the other
+  platform.
 
 - After editing a doc with Mermaid blocks, validate them before committing —
   a broken diagram fails silently on GitHub and reads as a missing section:
