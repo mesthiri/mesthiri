@@ -29,13 +29,22 @@ promptly and there is still nothing listening on a port.
 
 - [x] Repo seeded: README, design.md, CLAUDE.md, kaappi.pkg, MIT license
 - [x] Design unblocked: kaappi v0.26.0 shipped KEP-0022
-- [ ] **GitHub Apps** (human-only): register a **reader** App (triage,
-      prioritize, review, retro — Issues and Pull requests write for
-      comments and labels, contents read) and a **writer** App (code, fix —
-      Contents write for commits and branches, Pull requests write for the
-      PR, Issues write for state comments on the issue), neither with merge
-      permission, neither with a webhook URL. Store each private key as a
-      repository secret on the target.
+- [x] **GitHub Apps** registered and installed:
+      `mesthiri-reader` (app id 4825652) and `mesthiri-writer` (4825675),
+      both in the `mesthiri` org, both installed on selected repositories
+      rather than all. Permissions confirmed against the API rather than the
+      form: reader holds `contents: read` — which is what makes "triage and
+      review cannot write code" true rather than a promise — and writer holds
+      `contents: write`; both hold `issues` and `pull_requests` write and
+      `metadata` read, and nothing else. Private keys are repository secrets
+      on `mesthiri/sandbox` and exist nowhere else.
+
+      Registered through the plain form, not the manifest flow. Confirming a
+      manifest does not create the App: it issues a code that must be
+      exchanged at `POST /app-manifests/{code}/conversions`, and that
+      exchange returns the private key — one more step than the form, and it
+      routes a key through an extra hop. `deploy/register-apps.html` records
+      this and leads with the form.
 - [x] **Ecosystem deps installed** (dev machine done): `kaappi-http` and `kaappi-net` are C-FFI
       libraries, so their built shared object has to be where the FFI loader
       looks (`~/.kaappi/lib/`) — `--lib-path` alone finds the Scheme and not
