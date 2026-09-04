@@ -11,9 +11,21 @@ cd "$(dirname "$0")/.."
 libargs=(--lib-path ./lib)
 for l in $MESTHIRI_LIBS; do libargs+=(--lib-path "$l"); done
 
+# A raised error inside a test is NOT a failing exit code: kaappi prints it,
+# skips the rest of that top-level form, and carries on — so the assertion
+# never runs, the counters never see it, and the file still exits 0. That
+# happened: `validate-harnesses` was called with its arguments swapped, the
+# error scrolled past in stderr, and the suite reported 0 failed while the
+# check it was named for had not executed. So stderr is inspected too.
 status=0
 for t in tests/test-*.scm; do
-  kaappi "${libargs[@]}" "$t" || status=1
+  err=$(mktemp)
+  kaappi "${libargs[@]}" "$t" 2> >(tee "$err" >&2) || status=1
+  if grep -q 'error\[KP' "$err"; then
+    echo "  ERRORED: $t raised — assertions after it did not run"
+    status=1
+  fi
+  rm -f "$err"
 done
 
 if [ $status -ne 0 ]; then echo; echo "SUITE FAILED"; fi

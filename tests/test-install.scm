@@ -79,7 +79,7 @@
 (check "and its model reads back" "deepseek-v4-flash" (harness-model hn))
 (check "and its token budget is a number, not #f" #t (number? (harness-budget hn 'tokens)))
 (check "every role the scaffold ships validates"
-       #t (begin (validate-harnesses hdir (config-provider-names cfg)) #t))
+       #t (begin (validate-harnesses cfg hdir) #t))
 
 ;; --- the pull request a maintainer reads ---------------------------------
 (define b (install-pr-body install-layers))
