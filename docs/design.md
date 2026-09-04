@@ -259,6 +259,16 @@ looks like anything except the configuration typo it is. Deriving it deletes
 that failure mode. The only egress entries an operator writes are the
 package registries their own test command needs.
 
+**It is not yet enforced, and this document claimed otherwise.** `bwrap`
+runs with `--share-net`, so the agent reaches whatever the runner reaches;
+`allowed-hosts` computes the list and `agent-smoke` reports it, and nothing
+applies it. Enforcing it needs either root for iptables inside the runner or
+an HTTP proxy the agent's client honours, and neither is built. Until one
+is, containment is filesystem and credentials — which is where the
+repository risk lives — and **not** network. Stated here rather than left
+implied, because a control that is described and absent is worse than one
+that was never promised: it gets counted on.
+
 **Models are pinned, not aliased.** A harness names an exact model, and a
 floating alias is rejected: an alias that silently moves changes every
 verdict and every review afterwards, with nothing in the repository
@@ -351,8 +361,10 @@ the job's credentials, and the agent is driven by attacker-writable issue
 text. So within the job, `agent.sld` — the only module that may spawn the
 agent — wraps it in a namespace sandbox: read-only root, the scratch clone
 as the only writable mount, the token and key file outside the mount
-namespace entirely, network egress denied by default with an allowlist that
-**excludes the forge**, and a separate unprivileged uid.
+namespace entirely, and a separate unprivileged uid. Network egress is
+**not** filtered today — see the note above; the agent reaches what the
+runner reaches, and the forge is off-limits to it because it holds no
+credential rather than because a packet filter says so.
 
 **One credential does go in.** The agent needs its model backend's API key
 to work at all, so that key — and only that key — is passed into the
@@ -510,7 +522,7 @@ stage refuses to run.
 | Humans gate merges | mesthiri has no code path that merges; branch protection is the enforcing control (see below) |
 | Least privilege | reader and writer Apps, installed per repository, short-lived tokens |
 | Shim cannot be hijacked | `pull_request_target`, and the PR's code is never checked out by it |
-| Agent containment | namespace sandbox inside the runner; credentials outside its mount namespace; forge off its egress allowlist |
+| Agent containment | namespace sandbox inside the runner, refused if it cannot be built; credentials outside its mount namespace and absent from its environment. Egress is **not** filtered yet |
 | Credential boundary | the agent writes commits, the job pushes; there is no second path to the forge |
 | Untrusted input | issue and PR text is data; prompts label it as such; no shell ever sees it |
 | Output validation | schema-checked outside the agent, capped retries, then hard fail |

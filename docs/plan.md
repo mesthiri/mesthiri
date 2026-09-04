@@ -402,6 +402,15 @@ hands over with `needs-human`.
 `mesthiri/sandbox` naming something real — a test that failed twice, or a
 stage that spent its budget without reaching green.
 
+- [ ] **Enforce the egress allowlist.** It is derived from the provider
+      endpoint and reported by `agent-smoke`, and nothing applies it: bwrap
+      runs with `--share-net`, so the agent reaches whatever the runner
+      reaches. Needs either root for iptables in the runner or an HTTP proxy
+      the agent's client honours. Until then containment is filesystem and
+      credentials, which is where the repository risk is — but design.md,
+      architecture.md and the guide each described a network control that
+      did not exist, and now say so instead.
+
 ## M9 — Installation and distribution
 
 - [x] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus

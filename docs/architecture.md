@@ -43,7 +43,7 @@ flowchart LR
   appkeys --> bin
   modelkey -->|"the one credential<br/>that goes inside"| agent
   bin -->|"REST, installation token"| gh["GitHub API"]
-  agent -->|"egress allowlist, derived from<br/>the provider endpoint"| net["model API + registries"]
+  agent -->|"unfiltered: shares the<br/>runner's network"| net["model API + registries"]
   agent --x gh
   agent --x tok
 
@@ -55,8 +55,15 @@ flowchart LR
 
 The two crossed edges are the load-bearing ones: **the agent holds no
 *repository* credential and has no route to the forge.** The App keys and
-the installation token sit outside its mount namespace, and the forge is
-deliberately absent from its egress allowlist.
+the installation token sit outside its mount namespace *and* outside the
+environment it is given — a child inherits its parent's environment whatever
+is mounted, so both are needed.
+
+Note what the network edge does **not** say. Egress is unfiltered: the agent
+shares the runner's network namespace and can reach the forge's API like any
+other host. What stops it doing anything there is that it has no credential,
+not a packet filter. mesthiri derives an allowlist and reports it, and does
+not yet apply it (design.md).
 
 One credential does go in, and the diagram says so rather than implying a
 cleaner boundary than exists: the agent cannot call a model without the

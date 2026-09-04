@@ -248,8 +248,9 @@ code and a fork carries a copy. It is s-expressions, read as data.
   ;; Which agent program mesthiri drives. Not the model — see below.
   (agent (backend pi) (version "0.84.4"))
 
-  ;; Where models come from. The sandbox's network allowlist is derived
-  ;; from `endpoint`, so there is nothing to keep in sync by hand.
+  ;; Where models come from. `endpoint` is the one place the URL is
+  ;; written; the sandbox's allowlist is derived from it rather than kept
+  ;; in step by hand. (Derived and reported — not enforced yet.)
   (providers
     (main (endpoint "https://api.anthropic.com")
           (secret   MESTHIRI_MODEL_KEY)     ; the Actions secret
@@ -356,6 +357,12 @@ spots, which is precisely what you were hoping review would catch.
 If you use a gateway or a self-hosted endpoint, point `endpoint` at it. The
 sandbox allowlist follows from that value, so there is no second place to
 update and no way for the two to disagree.
+
+One thing not to assume from that: the allowlist is derived and reported,
+and **not yet enforced**. The agent shares the runner's network. Its
+containment is the filesystem and the absence of any repository credential,
+which is what bounds what a compromised run can do to your repository — but
+if you were counting on it being unable to reach the wider internet, it can.
 
 ## Your first triage
 

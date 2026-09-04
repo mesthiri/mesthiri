@@ -59,8 +59,8 @@
        "  (apps (reader " (number->string reader-id)
        ") (writer " (number->string writer-id) "))\n\n"
        "  (agent (backend pi) (version \"0.84.4\"))\n\n"
-       "  ;; The sandbox's network allowlist is derived from `endpoint`, so\n"
-       "  ;; there is nothing to keep in sync by hand.\n"
+       "  ;; The sandbox's allowlist is derived from `endpoint` rather than\n"
+       "  ;; kept in step by hand. Derived and reported; not enforced yet.\n"
        "  (providers\n"
        "    (main (endpoint \"https://api.deepseek.com\")\n"
        "          (secret MESTHIRI_MODEL_KEY)\n"

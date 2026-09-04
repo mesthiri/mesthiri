@@ -23,22 +23,73 @@
 
 (define-library (mesthiri sandbox)
   (import (scheme base) (scheme write) (scheme char) (scheme process-context)
-          (mesthiri config))
+          (mesthiri proc) (mesthiri config))
   (export sandbox-available? sandbox-wrap allowed-hosts endpoint-host
           sandbox-unavailable-reason)
   (begin
 
-    ;; bwrap is the mechanism; its absence is the reason.
+    ;; bwrap is the mechanism, and **being installed is not the same as
+    ;; working**. Ubuntu 24.04 ships
+    ;; `kernel.apparmor_restrict_unprivileged_userns=1`, under which bwrap is
+    ;; present, executable, and fails with `setting up uid map: Permission
+    ;; denied` the moment it tries to create a namespace. A presence check
+    ;; reports a sandbox that does not exist, which is the failure mode this
+    ;; module's own header calls worse than having none.
+    ;;
+    ;; So the check runs bwrap. `/bin/true` under the same namespace flags the
+    ;; real wrap uses, once per process — the probe costs a few milliseconds
+    ;; and is the difference between a control and a claim.
+    (define probe-result (list 'unknown))
+
     (define (sandbox-available?)
-      (and (eq? (host-kind) 'linux)
-           (file-executable? "/usr/bin/bwrap")))
+      (not (sandbox-unavailable-reason)))
 
     (define (sandbox-unavailable-reason)
       (cond ((not (eq? (host-kind) 'linux))
              "not Linux: namespace sandboxing is unavailable on this host")
             ((not (file-executable? "/usr/bin/bwrap"))
-             "bwrap is not installed")
-            (else #f)))
+             "bwrap is not installed (apt-get install bubblewrap)")
+            (else (probe))))
+
+    (define (probe)
+      (if (eq? (car probe-result) 'unknown)
+          (set-car! probe-result (run-probe)))
+      (car probe-result))
+
+    ;; #f when the namespace was created, otherwise why it was not.
+    (define (run-probe)
+      (guard (e ((proc-error? e)
+                 (let ((said (proc-error-stderr e)))
+                   (string-append
+                    "bwrap is installed but cannot create a namespace: "
+                    (if (and (string? said) (> (string-length said) 0))
+                        (trim said)
+                        "no reason given")
+                    (if (and (string? said) (contains? said "uid map"))
+                        ;; The one cause worth naming, because the fix is a
+                        ;; sysctl on the host and nothing about the message
+                        ;; suggests that.
+                        " — on Ubuntu 24.04 this is normally kernel.apparmor_restrict_unprivileged_userns=1"
+                        ""))))
+                (#t "bwrap could not be run at all"))
+        (proc-run (list "/usr/bin/bwrap" "--unshare-all" "--share-net"
+                        "--die-with-parent" "--new-session"
+                        "--ro-bind" "/" "/" "--proc" "/proc" "--dev" "/dev"
+                        "--" "/bin/true"))
+        #f))
+
+    (define (trim s)
+      (let loop ((n (string-length s)))
+        (if (and (> n 0) (let ((c (string-ref s (- n 1))))
+                           (or (char=? c #\newline) (char=? c #\space))))
+            (loop (- n 1))
+            (substring s 0 n))))
+
+    (define (contains? s sub)
+      (let ((n (string-length s)) (m (string-length sub)))
+        (let loop ((i 0)) (cond ((> (+ i m) n) #f)
+                                ((string=? (substring s i (+ i m)) sub) #t)
+                                (else (loop (+ i 1)))))))
 
     (define (host-kind)
       (if (get-environment-variable "RUNNER_OS")
@@ -93,7 +144,14 @@
            (append
             (list "/usr/bin/bwrap"
                   "--unshare-all"
-                  "--share-net"          ; egress is filtered, not removed
+                  ;; NOT filtered. `--share-net` shares the host's network
+                  ;; namespace, so the agent reaches whatever the runner
+                  ;; reaches. `allowed-hosts` derives the list mesthiri would
+                  ;; enforce and `agent-smoke` reports it, but nothing applies
+                  ;; it: filtering needs either root for iptables or a proxy
+                  ;; the agent's HTTP client honours, and neither is built.
+                  ;; This comment used to claim otherwise. See design.md.
+                  "--share-net"
                   "--die-with-parent"
                   "--new-session"
                   "--ro-bind" "/" "/"

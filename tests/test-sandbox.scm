@@ -1,4 +1,4 @@
-(import (scheme base) (scheme write) (mesthiri sandbox) (mesthiri config))
+(import (scheme base) (scheme file) (mesthiri proc) (scheme write) (mesthiri sandbox) (mesthiri config))
 
 (define pass 0) (define fail 0)
 (define (check name expected actual)
@@ -58,6 +58,45 @@
        #t (if (sandbox-available?)
               (not (sandbox-unavailable-reason))
               (string? (sandbox-unavailable-reason))))
+
+
+;; --- the boundary, asserted rather than described ---------------------------
+;;
+;; A sandbox nobody has tested is a paragraph. These run only where a
+;; namespace can actually be created, and they say so loudly when they cannot
+;; — because "installed" and "works" came apart once already: Ubuntu 24.04
+;; ships kernel.apparmor_restrict_unprivileged_userns=1, under which bwrap is
+;; present, executable, and fails at `setting up uid map: Permission denied`.
+(define wd "/tmp/mesthiri-sandbox-test/work")
+(define outside "/tmp/mesthiri-sandbox-test/outside.txt")
+
+;; True when the command could NOT do the thing — which is the passing case.
+(define (blocked? argv)
+  (let ((wrapped (sandbox-wrap argv wd (string-append wd "/secrets"))))
+    (and wrapped (guard (e (#t #t)) (proc-run wrapped) #f))))
+
+(cond
+ ((not (sandbox-available?))
+  (display "\n  SKIPPED the containment assertions: ")
+  (display (sandbox-unavailable-reason)) (newline)
+  (display "  On Linux, install bubblewrap and permit unprivileged user\n")
+  (display "  namespaces. Nothing below ran.\n\n"))
+ (else
+  (proc-run (list "mkdir" "-p" (string-append wd "/secrets")))
+  (call-with-output-file outside (lambda (p) (display "a job secret" p)))
+
+  ;; The baseline matters as much as the assertions: without it a wrap that
+  ;; fails for an unrelated reason reads as perfect containment.
+  (check "the sandbox can run anything at all"
+         #f (blocked? (list "/bin/true")))
+  (check "and the workdir is writable inside it"
+         #f (blocked? (list "/usr/bin/touch" (string-append wd "/written"))))
+
+  ;; What it is for.
+  (check "a file outside the workdir cannot be written"
+         #t (blocked? (list "/usr/bin/touch" "/tmp/mesthiri-sandbox-test/nope")))
+  (check "the secrets directory is empty inside, whatever is in it outside"
+         #t (blocked? (list "/bin/cat" (string-append wd "/secrets/key.pem"))))))
 
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)

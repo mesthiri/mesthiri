@@ -232,8 +232,21 @@
            (wrapped (or (sandbox-wrap argv workdir
                                       (string-append workdir "/secrets"))
                         argv)))
+      ;; Fail closed in CI. A warning was the old behaviour and it was wrong:
+      ;; the run continued, the agent was uncontained, and the only trace was
+      ;; one line in a log nobody reads on a green run. Outside CI — someone
+      ;; driving `agent-smoke` on a laptop — a warning is right, because there
+      ;; is no namespace sandbox on macOS at all and refusing would make the
+      ;; command useless rather than safe.
       (if (not (sandbox-available?))
-          (log-warn "no namespace sandbox on this host: the agent is UNCONTAINED"))
+          (let ((why (sandbox-unavailable-reason)))
+            (if (env "CI")
+                (die "refusing to run the agent uncontained: " why
+                     "\n       The runner must install bubblewrap and permit"
+                     " unprivileged user\n       namespaces; the reusable"
+                     " workflow does both.")
+                (log-warn "no namespace sandbox on this host (" why
+                          "): the agent is UNCONTAINED"))))
       (write-agent-home! home (render-models-json
                                config (list (cons provider-name model))))
       ;; The one secret the agent can see, because it cannot call a model
