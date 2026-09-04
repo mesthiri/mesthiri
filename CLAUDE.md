@@ -60,11 +60,21 @@ symlink and would overwrite everything here.
   repository that it reads.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
-- After editing `docs/architecture.md`, re-render every Mermaid block before
-  committing — a broken diagram fails silently on GitHub and looks like a
-  missing section. `npm i mermaid jsdom` in a scratch directory and call
-  `mermaid.parse` plus `mermaid.render` on each fenced block; parse alone
-  misses `classDef` errors.
+- After editing a doc with Mermaid blocks, validate them before committing —
+  a broken diagram fails silently on GitHub and reads as a missing section:
+
+  ```
+  npm i --no-save mermaid jsdom
+  node scripts/check-diagrams.mjs
+  ```
+
+  It runs both `parse` and `render`, because render catches references to
+  things that do not exist — a `linkStyle` index past the last edge, an
+  `activate` for a participant never introduced — which parse accepts.
+  Neither step catches a malformed `classDef` or `style`; mermaid ignores
+  those silently, so a fill that never appears is on you to notice.
+  The script's comments explain the jsdom setup, which is fiddly in three
+  ways that each fail looking like something else.
 
 ## Related work
 

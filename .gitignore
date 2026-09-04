@@ -1,3 +1,5 @@
 *.sbc
 .DS_Store
 zig-out/
+node_modules/
+package-lock.json
