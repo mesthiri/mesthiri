@@ -1,0 +1,139 @@
+{% extends "main.html" %}
+
+{#
+  The landing page. Styles live in docs/stylesheets/extra.css under the
+  "landing" heading, scoped by the ms- prefix.
+
+  The copy here is the guide's and README's own words, deliberately: the
+  status paragraph is the same claim they make, and docs-sync greps all
+  three. If the guide changes what mesthiri does, this page changes too.
+
+  The mascot is inlined so its plumb line can continue up the page and
+  its fills can be recoloured for the dark scheme. partials/mascot.html is
+  a symlink to assets/mascot.svg; it carries a template name because
+  MkDocs copies every non-template file under overrides/ to the site root.
+#}
+
+{% block content %}
+<div class="ms-home">
+
+  <section class="ms-hero">
+    <div class="ms-hero__copy">
+      <h1>A foreman for your repository.</h1>
+      <p class="ms-lede">mesthiri triages your issues, implements the
+      small ones, and opens pull requests for you to review. It runs
+      inside the CI you already have: no server, no database, nothing
+      listening on a port.</p>
+      <p class="ms-never">It never merges anything.</p>
+      <p class="ms-cta">
+        <a class="ms-btn ms-btn--primary" href="{{ 'guide/' | url }}">Read the guide</a>
+        <a class="ms-btn" href="https://github.com/mesthiri/mesthiri">See the source</a>
+      </p>
+    </div>
+    <div class="ms-hero__stage" aria-hidden="true">
+      <span class="ms-plumb"></span>
+      <div class="ms-mascot">{% include "partials/mascot.html" %}</div>
+    </div>
+  </section>
+
+  <div class="ms-beam ms-bleed" aria-hidden="true"></div>
+
+  <section class="ms-status ms-bleed">
+    <h2>Where it stands</h2>
+    <p>Every milestone has landed, and the test suite drives a live pi
+    process against a stub model server. What has never happened is a run
+    against a real model or a real repository. Until it has, read the
+    guide as a design preview rather than instructions: every transcript
+    in it is designed, not captured.</p>
+    <p>The CI-native execution model is learned from
+    <a href="https://fullsend.sh">fullsend</a>, an Apache-2.0 Go project
+    pursuing the same goal at far larger scale. mesthiri is an independent
+    implementation in <a href="https://kaappi-lang.org/">Kaappi Scheme</a>,
+    and stays MIT.</p>
+  </section>
+
+  <section class="ms-section ms-stages">
+    <h2>Six stages, each a CI job</h2>
+    <ol class="ms-rail">
+      <li>
+        <div class="ms-rail__name">Triage<small>issue events, and a schedule</small></div>
+        <p>Classifies each incoming issue, checks its claims against a
+        checkout of your code, and proposes a priority from your rubric.</p>
+      </li>
+      <li>
+        <div class="ms-rail__name">Prioritize<small>a schedule</small></div>
+        <p>Scores and ranks the ready backlog.</p>
+      </li>
+      <li>
+        <div class="ms-rail__name">Code<small>a label, or <code>/implement</code></small></div>
+        <p>Drives a coding agent to a tested change. The job, not the
+        agent, pushes it and opens the pull request.</p>
+      </li>
+      <li>
+        <div class="ms-rail__name">Review<small>mesthiri's own pull requests</small></div>
+        <p>Reads the diff for correctness, security, performance, and
+        whether it does what the issue asked.</p>
+      </li>
+      <li>
+        <div class="ms-rail__name">Fix<small>review findings, or <code>/fix</code></small></div>
+        <p>Applies the findings and re-runs the tests until they pass.</p>
+      </li>
+      <li>
+        <div class="ms-rail__name">Retro<small>a schedule</small></div>
+        <p>Reads completed runs and files process-improvement proposals as
+        issues on your repository.</p>
+      </li>
+    </ol>
+    <p class="ms-note">Five of the six also answer a slash command from
+    someone whose own permission on the repository covers it. Prioritize
+    only runs on a schedule: it ranks a backlog, which is not a thing you
+    ask for one of.</p>
+  </section>
+
+  <section class="ms-section ms-promises-section">
+    <h2>What it will never do</h2>
+    <ul class="ms-promises">
+      <li><b>Merge anything.</b> There is no code path that calls the
+      merge endpoint, and your branch protection is what enforces it.</li>
+      <li><b>Touch a denied path,</b> including its own configuration.</li>
+      <li><b>Act on tier 2 work</b> without a human authorizing it.</li>
+      <li><b>Take instructions from issue text.</b> Issue and pull request
+      bodies are data. A comment telling it to ignore the rubric changes
+      nothing.</li>
+      <li><b>Reach GitHub from inside the agent.</b> The agent holds no
+      credential and has no route to the forge. It writes files; the job
+      decides what happens to them.</li>
+      <li><b>Work on itself.</b> mesthiri is never installed on its own
+      repository.</li>
+    </ul>
+  </section>
+
+  <section class="ms-section ms-start">
+    <h2>How you get there</h2>
+    <ol class="ms-steps">
+      <li>
+        <p>See what it would say about your repository without installing
+        anything. It reads your open issues, applies your rubric, and
+        writes nothing.</p>
+        <pre><code>mesthiri try owner/repo --rubric docs/dev/github-issues.md</code></pre>
+      </li>
+      <li>
+        <p>Register two GitHub Apps, one that reads and one that writes,
+        and paste three secrets. The command prints exactly what to put on
+        the form, and stops where a person has to be present.</p>
+        <pre><code>mesthiri apps create</code></pre>
+      </li>
+      <li>
+        <p>Open the pull request that turns it on. Everything starts in
+        dry-run: triage comments its reasoning and applies no labels until
+        you change one line.</p>
+        <pre><code>mesthiri install owner/repo --operator "Your Name &lt;you@example.org&gt;"</code></pre>
+      </li>
+    </ol>
+    <p class="ms-note"><a href="{{ 'guide/' | url }}">The guide</a> walks
+    through each step, and through what to do when something goes
+    wrong.</p>
+  </section>
+
+</div>
+{% endblock %}

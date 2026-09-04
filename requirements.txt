@@ -1,0 +1,7 @@
+# Build dependencies for mesthiri.org, and nothing else — mesthiri itself
+# has no Python. Used by .github/workflows/site.yml and local previews.
+# The pins match kaappi-lang.org's, so a theme problem found there is one
+# found here too. Bump deliberately: a mkdocs-material major can break
+# overrides/ without --strict noticing.
+mkdocs==1.6.1
+mkdocs-material==9.7.6

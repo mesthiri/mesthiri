@@ -1,0 +1,509 @@
+/* mesthiri.org — the brand palette bridged into Material, and the
+   landing page. Palette, marks and typeface: assets/README.md. */
+
+/* ---- tokens ---------------------------------------------------------- */
+
+:root {
+  --ms-display: "Baloo Chettan 2", "Anek Malayalam", system-ui, sans-serif;
+}
+
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: #F5F0EB;
+  --md-default-fg-color: #1A1410;
+  --md-default-fg-color--light: #4A3A2C;
+  --md-default-fg-color--lighter: #7A6A58;
+  --md-default-fg-color--lightest: rgba(26, 20, 16, .08);
+  --md-primary-fg-color: #1A1410;
+  --md-primary-fg-color--light: #34281D;
+  --md-primary-fg-color--dark: #120E0B;
+  --md-primary-bg-color: #F3E9DB;
+  --md-primary-bg-color--light: rgba(243, 233, 219, .7);
+  --md-accent-fg-color: #B07530;
+  --md-accent-fg-color--transparent: rgba(176, 117, 48, .1);
+  --md-accent-bg-color: #F3E9DB;
+  /* ochre, deepened until it passes AA on the cream ground */
+  --md-typeset-a-color: #8A5E18;
+  --md-code-bg-color: #EDE5DA;
+  --md-code-fg-color: #34281D;
+  --md-footer-bg-color: #1A1410;
+  --md-footer-bg-color--dark: #120E0B;
+  --md-footer-fg-color: #F3E9DB;
+  --md-footer-fg-color--light: rgba(243, 233, 219, .7);
+  --md-footer-fg-color--lighter: rgba(243, 233, 219, .45);
+
+  /* landing */
+  --ms-ink: #1A1410;
+  --ms-paper: #F5F0EB;
+  --ms-muted: #7A6A58;
+  --ms-line: #1A1410;
+  --ms-beam: #34281D;
+  --ms-beam-hi: rgba(221, 213, 203, .3);
+  --ms-rivet: rgba(26, 20, 16, .6);
+  --ms-band: #1A1410;
+  --ms-band-ink: #F3E9DB;
+  --ms-band-link: #E8B563;
+  --ms-accent: #8A5E18;
+  --ms-bob: #D08B3C;
+  --ms-btn-bg: #1A1410;
+  --ms-btn-fg: #F3E9DB;
+}
+
+[data-md-color-scheme="slate"] {
+  /* Material derives its slate greys from this hue; warm them first, then
+     pin the grounds to the palette exactly. */
+  --md-hue: 28;
+  --md-default-bg-color: #1A1410;
+  --md-default-bg-color--light: #241B14;
+  --md-default-bg-color--lighter: #2A2016;
+  --md-default-bg-color--lightest: #34281D;
+  --md-default-fg-color: #F3E9DB;
+  --md-default-fg-color--light: #D9CDBB;
+  --md-default-fg-color--lighter: #9C8A77;
+  --md-default-fg-color--lightest: rgba(243, 233, 219, .1);
+  --md-primary-fg-color: #1A1410;
+  --md-primary-fg-color--light: #34281D;
+  --md-primary-fg-color--dark: #120E0B;
+  --md-primary-bg-color: #F3E9DB;
+  --md-primary-bg-color--light: rgba(243, 233, 219, .7);
+  --md-accent-fg-color: #E8B563;
+  --md-accent-fg-color--transparent: rgba(232, 181, 99, .1);
+  --md-accent-bg-color: #1A1410;
+  --md-typeset-a-color: #E8B563;
+  --md-code-bg-color: #241B14;
+  --md-code-fg-color: #E9DDCB;
+  --md-footer-bg-color: #120E0B;
+  --md-footer-bg-color--dark: #0C0907;
+
+  /* landing */
+  --ms-ink: #F3E9DB;
+  --ms-paper: #1A1410;
+  --ms-muted: #9C8A77;
+  --ms-line: #42342A;
+  --ms-beam: #59473A;
+  --ms-beam-hi: rgba(201, 190, 176, .3);
+  --ms-rivet: rgba(26, 20, 16, .6);
+  --ms-band: #2A2016;
+  --ms-band-ink: #F3E9DB;
+  --ms-band-link: #E8B563;
+  --ms-accent: #E8B563;
+  --ms-bob: #CE8B3E;
+  --ms-btn-bg: #E8B563;
+  --ms-btn-fg: #1A1410;
+}
+
+/* ---- chrome ---------------------------------------------------------- */
+
+/* The head mark is wider than it is tall; give it the header's height. */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.2rem;
+  width: auto;
+}
+
+/* Site name in the wordmark's face; the page title that swaps in on
+   scroll stays in the body face. */
+.md-header__topic:first-child {
+  font-family: var(--ms-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: .01em;
+}
+
+.md-tabs__link {
+  font-weight: 600;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-family: var(--ms-display);
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset h1 {
+  font-weight: 800;
+  font-size: 2.2em;
+  line-height: 1.1;
+}
+
+.md-typeset h2 {
+  font-size: 1.5em;
+  line-height: 1.2;
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+}
+
+/* The guide's blockquotes are transcripts of what mesthiri says, not
+   asides: full ink, amber rule. */
+.md-typeset blockquote {
+  border-left: .2rem solid var(--ms-bob);
+  color: var(--md-default-fg-color);
+}
+
+/* ---- landing --------------------------------------------------------- */
+
+/* Full-bleed bands reach past the content column; clip the overshoot at
+   the main element so it never becomes a horizontal scrollbar. */
+.md-main {
+  overflow-x: clip;
+}
+
+.md-typeset .ms-home {
+  /* cancel .md-content__inner's own margins and top padding */
+  margin: -1rem -.8rem 0;
+  /* mascot geometry: --ms-u is one SVG user unit, of 380 across */
+  --ms-mascot-w: 21rem;
+  --ms-u: calc(var(--ms-mascot-w) / 380);
+  color: var(--ms-ink);
+}
+
+.md-typeset .ms-home p {
+  margin: 0;
+}
+
+.ms-bleed {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-left: calc(50vw - 50% + .8rem);
+  padding-right: calc(50vw - 50% + .8rem);
+}
+
+/* hero */
+
+.md-typeset .ms-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--ms-mascot-w);
+  gap: 2rem;
+  align-items: end;
+  padding: 3.5rem .8rem 0;
+}
+
+.ms-hero__copy {
+  max-width: 34rem;
+  padding-bottom: 3.5rem;
+}
+
+.md-typeset .ms-hero h1 {
+  font-size: clamp(2.4rem, 5.2vw, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: -.005em;
+  margin: 0 0 1.2rem;
+  color: var(--ms-ink);
+}
+
+.md-typeset .ms-lede {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 0 0 .8rem;
+}
+
+.md-typeset .ms-never {
+  font-family: var(--ms-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1.2;
+  margin: .5rem 0 1.7rem;
+}
+
+.md-typeset .ms-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.md-typeset .ms-btn {
+  display: inline-block;
+  padding: .5rem 1rem;
+  border: 2px solid var(--ms-ink);
+  border-radius: .45rem;
+  font-weight: 600;
+  font-size: .85rem;
+  line-height: 1.3;
+  color: var(--ms-ink);
+  text-decoration: none;
+  transition: background-color .15s, color .15s;
+}
+
+.md-typeset .ms-btn:hover,
+.md-typeset .ms-btn:focus-visible {
+  background: var(--ms-accent);
+  border-color: var(--ms-accent);
+  color: var(--ms-paper);
+  outline: none;
+}
+
+.md-typeset .ms-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--ms-paper), 0 0 0 5px var(--ms-accent);
+}
+
+.md-typeset .ms-btn--primary {
+  background: var(--ms-btn-bg);
+  border-color: var(--ms-btn-bg);
+  color: var(--ms-btn-fg);
+}
+
+/* The bird stands on the page's beam, and its plumb line continues up to
+   the top of the hero. Offsets are in SVG units: the beam's top edge is
+   300 units below the image's top, the line is at x=362 of a viewBox that
+   starts at 8, and it begins 2 units down. */
+.ms-hero__stage {
+  position: relative;
+  align-self: stretch;
+  min-height: calc(334 * var(--ms-u));
+}
+
+.ms-plumb {
+  position: absolute;
+  top: -3.5rem;
+  bottom: calc(298 * var(--ms-u));
+  right: calc(24.25 * var(--ms-u));
+  width: calc(3.5 * var(--ms-u));
+  background: var(--ms-line);
+}
+
+.ms-mascot {
+  position: absolute;
+  right: 0;
+  bottom: calc(-34 * var(--ms-u));
+  width: var(--ms-mascot-w);
+  line-height: 0;
+  z-index: 1;
+}
+
+.ms-mascot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The page draws the beam and its rivets; hide the SVG's own so there is
+   no seam where a 290-unit beam meets a page-wide one. */
+.ms-mascot rect[y="298"],
+.ms-mascot circle[r="4"] {
+  display: none;
+}
+
+/* Dark variant, by fill: the same substitutions as assets/mascot-dark.svg. */
+[data-md-color-scheme="slate"] .ms-mascot [fill="#1A1410"]   { fill: #42342A; }
+[data-md-color-scheme="slate"] .ms-mascot [stroke="#1A1410"] { stroke: #42342A; }
+[data-md-color-scheme="slate"] .ms-mascot [fill="#34281D"]   { fill: #59473A; }
+[data-md-color-scheme="slate"] .ms-mascot [fill="#9A6520"]   { fill: #A87434; }
+[data-md-color-scheme="slate"] .ms-mascot [stroke="#9A6520"] { stroke: #A87434; }
+[data-md-color-scheme="slate"] .ms-mascot [fill="#B07530"]   { fill: #C08A42; }
+[data-md-color-scheme="slate"] .ms-mascot [fill="#D08B3C"]   { fill: #CE8B3E; }
+
+.ms-beam {
+  height: calc(22 * var(--ms-u));
+  background-color: var(--ms-beam);
+  background-image:
+    linear-gradient(var(--ms-beam-hi), var(--ms-beam-hi)),
+    radial-gradient(circle at 50% calc(12 * var(--ms-u)),
+      var(--ms-rivet) calc(4 * var(--ms-u)),
+      transparent calc(4.6 * var(--ms-u)));
+  background-size: 100% calc(7 * var(--ms-u)), calc(119 * var(--ms-u)) 100%;
+  background-repeat: no-repeat, repeat-x;
+}
+
+/* status band */
+
+.md-typeset .ms-status {
+  background: var(--ms-band);
+  color: var(--ms-band-ink);
+  padding-top: 2.4rem;
+  padding-bottom: 2.8rem;
+}
+
+.md-typeset .ms-status h2 {
+  font-size: 1.25rem;
+  margin: 0 0 .8rem;
+  color: var(--ms-band-link);
+}
+
+.md-typeset .ms-status p {
+  max-width: 38rem;
+  line-height: 1.55;
+}
+
+.md-typeset .ms-status p + p {
+  margin-top: .9rem;
+}
+
+.md-typeset .ms-status a {
+  color: var(--ms-band-link);
+}
+
+/* sections */
+
+.md-typeset .ms-section {
+  padding: 3.2rem .8rem 0;
+}
+
+.md-typeset .ms-start {
+  padding-bottom: 2.5rem;
+}
+
+.md-typeset .ms-section h2 {
+  font-size: 1.8rem;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--ms-ink);
+}
+
+.md-typeset .ms-note {
+  max-width: 38rem;
+  margin-top: 1.6rem;
+  color: var(--ms-muted);
+}
+
+/* the six stages, hung on one line in order. List selectors go through
+   .ms-home because Material's own `ol:not([hidden])` and `ol li` rules
+   outrank a two-class selector. */
+
+.md-typeset .ms-home .ms-rail {
+  list-style: none;
+  margin: 1.6rem 0 0;
+  padding: 0 0 0 1.6rem;
+  border-left: 3px solid var(--ms-line);
+}
+
+.md-typeset .ms-home .ms-rail > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1.5rem;
+  margin: 0;
+  padding: .7rem 0 1rem;
+}
+
+.md-typeset .ms-home .ms-rail > li::before {
+  content: "";
+  position: absolute;
+  left: calc(-1.95rem - 4.5px);
+  top: 1rem;
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--ms-bob);
+  border: 3px solid var(--ms-paper);
+}
+
+.ms-rail__name {
+  font-family: var(--ms-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+.ms-rail__name small {
+  display: block;
+  font-family: var(--md-text-font-family);
+  font-weight: 500;
+  font-size: .72rem;
+  line-height: 1.4;
+  margin-top: .25rem;
+  color: var(--ms-muted);
+}
+
+.md-typeset .ms-rail p {
+  max-width: 32rem;
+  padding-top: .15rem;
+}
+
+/* promises */
+
+.md-typeset .ms-home .ms-promises {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.3rem 2.5rem;
+  max-width: 52rem;
+  margin: 1.6rem 0 0;
+  padding: 0;
+}
+
+.md-typeset .ms-home .ms-promises > li {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* steps: a real sequence, so it is numbered */
+
+.md-typeset .ms-home .ms-steps {
+  list-style: none;
+  counter-reset: step;
+  max-width: 40rem;
+  margin: 1.6rem 0 0;
+  padding: 0;
+}
+
+.md-typeset .ms-home .ms-steps > li {
+  position: relative;
+  counter-increment: step;
+  margin: 0 0 1.5rem;
+  padding-left: 3rem;
+}
+
+.md-typeset .ms-home .ms-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--ms-btn-bg);
+  color: var(--ms-btn-fg);
+  font-family: var(--ms-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 2rem;
+  text-align: center;
+}
+
+.md-typeset .ms-steps pre {
+  margin: .6rem 0 0;
+}
+
+/* narrower */
+
+@media (max-width: 1000px) {
+  .md-typeset .ms-home {
+    --ms-mascot-w: 17rem;
+  }
+  .md-typeset .ms-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .ms-hero__copy {
+    padding-bottom: 1rem;
+  }
+  .ms-hero__stage {
+    align-self: auto;
+  }
+  .ms-plumb {
+    top: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .md-typeset .ms-home {
+    --ms-mascot-w: 14rem;
+  }
+  .md-typeset .ms-home .ms-rail > li,
+  .md-typeset .ms-home .ms-promises {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .5rem;
+  }
+  .md-typeset .ms-home .ms-promises {
+    gap: 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .ms-btn {
+    transition: none;
+  }
+}

@@ -5,7 +5,7 @@ description: Audit mesthiri's six documents against each other after a design ch
 
 # Audit the docs against design.md
 
-`docs/design.md` decides; `plan.md`, `architecture.md`, `guide.md`,
+`docs/design.md` decides; `plan.md`, `architecture.md`, `guide/`,
 `terminology.md` and `README.md` follow. This audit has found real defects
 every time it has been run, so run it rather than reasoning about whether it
 is needed.
@@ -20,7 +20,7 @@ most common failure here — and it points either way.
 
 ```bash
 # every CLI affordance the docs mention, and whether plan.md owns it
-grep -rhoE 'mesthiri [a-z-]+' docs/*.md README.md | sort -u
+grep -rhoE 'mesthiri [a-z-]+' docs README.md | sort -u
 # then for each: does plan.md have a milestone bullet for it?
 ```
 
@@ -40,7 +40,7 @@ something. Overstating a boundary is the dangerous direction.
 ## 3. Cross-references after any renumbering
 
 ```bash
-grep -n "M[0-9]" docs/plan.md docs/*.md CLAUDE.md
+grep -rn "M[0-9]" docs CLAUDE.md
 ```
 
 Milestone numbers shift whenever a milestone is inserted or split, and the
@@ -49,7 +49,7 @@ references in Later/Risks/demos do not move themselves.
 ## 4. One word per concept
 
 ```bash
-grep -c "<term>" docs/*.md    # for any term the change introduced
+grep -rc "<term>" docs        # for any term the change introduced
 ```
 
 Anything named in a change must match `docs/terminology.md`. If the change
@@ -64,6 +64,19 @@ grep -rn "service\|daemon\|database\|store\|webhook receiver\|cursor" docs/ READ
 
 Hits are fine where the docs describe what was *replaced*. They are defects
 where they name a live part of mesthiri.
+
+## 6. Does the site still build
+
+```bash
+mkdocs build --strict
+# the nav and the guide's index page are two copies of one list
+diff <(grep -oE 'guide/[a-z-]+\.md' mkdocs.yml | sed 's#guide/##') \
+     <(grep -oE '\]\([a-z-]+\.md\)' docs/guide/README.md | tr -d '()]')
+```
+
+The strict build fails on a link to any document the site does not
+publish, and on a guide page the nav omits. The `diff` is empty when the
+two lists agree, in order.
 
 ## Drift patterns seen before
 
@@ -126,6 +139,10 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
 16. **A status claim that ages badly.** README said "M1 and M2 are in, 183
     tests" long after M8. A count or milestone list in prose needs a command
     behind it: `ls lib/mesthiri/*.sld | wc -l`, `grep -c "\[ \]" docs/plan.md`.
+    The guide's preamble said "M1 and M2 have landed ... no stage does"
+    until the site made it a front page. The claim now lives in three
+    places: `grep -n 'real model' README.md docs/guide/README.md
+    overrides/home.html`.
 
 
 17. **A fixture that abbreviates the shape it stands in for.**
@@ -140,7 +157,15 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
     and did nothing with it. Nothing reads as more implemented than a
     parameter with a comment. Grep any newly-documented mechanism for a use
     of its own argument.
-
+19. **A published page links to an unpublished document.** The guide
+    pointed at `terminology.md` with a relative link, which is right on
+    GitHub and a broken link on the site, where terminology is not
+    published. Check 6 catches it; the fix is a GitHub URL, not
+    publishing the document.
+20. **One list kept in two files.** The guide's page order is in
+    `mkdocs.yml` for the site and in `docs/guide/README.md` for GitHub.
+    Check 6's `diff` is the test; a page added to one and not the other
+    is invisible from either.
 
 ## Report and record
 

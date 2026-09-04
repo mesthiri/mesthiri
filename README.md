@@ -8,6 +8,8 @@
 **Autonomous development-lifecycle agents for Git-hosted projects, written in
 [Kaappi Scheme](https://kaappi-lang.org/).**
 
+The user guide is published at [mesthiri.org](https://mesthiri.org/).
+
 *Mesthiri* (മേസ്തിരി) is Malayalam for the site foreman — the person who
 directs a crew of workers on a building site. That is what this project is:
 an orchestrator that directs headless coding agents through the software
@@ -60,7 +62,8 @@ independent implementation in Kaappi Scheme rather than a port: no fullsend
 code, schema or prose is copied, and mesthiri stays MIT. If you want this
 capability in production today, look at fullsend first.
 
-[docs/guide.md](docs/guide.md) shows the intended end-user experience —
+[The guide](docs/guide/), published at [mesthiri.org](https://mesthiri.org/),
+shows the intended end-user experience —
 install, configure, first triage, what a mesthiri pull request looks like.
 It was written ahead of the code as a design tool and the code has now
 caught up to it — but until mesthiri has triaged a real issue with a real

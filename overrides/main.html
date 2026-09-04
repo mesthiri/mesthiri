@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {# Baloo Chettan 2 is the wordmark's face (assets/README.md). Headings
+     and the header title are set in it so the site reads as one lockup.
+     The body and code faces are loaded by theme.font in mkdocs.yml. #}
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@700;800&display=swap">
+{% endblock %}

@@ -1,0 +1,126 @@
+# mesthiri.org — the user guide and a landing page. Everything else under
+# docs/ is a design document and stays on GitHub (see exclude_docs below).
+# Local preview: pip install -r requirements.txt && mkdocs serve
+
+site_name: mesthiri
+site_url: https://mesthiri.org/
+site_description: >-
+  Autonomous development-lifecycle agents for Git-hosted projects, running
+  inside the CI you already have. Written in Kaappi Scheme.
+repo_url: https://github.com/mesthiri/mesthiri
+repo_name: mesthiri/mesthiri
+edit_uri: edit/main/docs/
+copyright: >-
+  MIT License &mdash; written in
+  <a href="https://kaappi-lang.org/">Kaappi Scheme</a>
+
+theme:
+  name: material
+  custom_dir: overrides
+  # The header is dark roast in both schemes, so the dark variant of the
+  # head mark is the right one everywhere. Marks: assets/README.md.
+  logo: assets/logo-dark.svg
+  favicon: assets/icon.svg
+  font:
+    # Anek Malayalam is from the same foundry as the wordmark's Baloo
+    # Chettan 2 and drawn for the same script. Baloo itself is loaded by
+    # overrides/main.html for headings. JetBrains Mono matches
+    # kaappi-lang.org, which readers will move between.
+    text: Anek Malayalam
+    code: JetBrains Mono
+  palette:
+    # Colours are the brand palette, set in docs/stylesheets/extra.css;
+    # "custom" tells Material not to paint its own over them.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.footer
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+# The guide's order. docs/guide/README.md lists the same pages for readers
+# on GitHub; the docs-sync skill has the diff that keeps the two in step.
+nav:
+  - Home: index.md
+  - Guide:
+    - guide/README.md
+    - Try it before installing: guide/try.md
+    - Installing: guide/installing.md
+    - Configuring: guide/configuring.md
+    - Choosing models: guide/models.md
+    - Your first triage: guide/first-triage.md
+    - Commands: guide/commands.md
+    - What a pull request looks like: guide/pull-requests.md
+    - Turning autonomy up: guide/autonomy.md
+    - Budgets: guide/budgets.md
+    - When something goes wrong: guide/troubleshooting.md
+    - Turning it off: guide/turning-off.md
+    - What mesthiri will never do: guide/never.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/mesthiri/mesthiri
+
+watch:
+  - overrides
+
+# Only the guide and the landing page are published. A guide page that
+# links to one of these with a relative link fails the strict build —
+# link to the file on GitHub instead. assets/ is a symlink to the marks,
+# whose README is not a page.
+exclude_docs: |
+  /design.md
+  /plan.md
+  /architecture.md
+  /terminology.md
+  /pi-rpc.md
+  /assets/README.md
+
+validation:
+  nav:
+    # A guide page left out of the nav is a page nobody can reach. Make it
+    # fail --strict rather than log at info level.
+    omitted_files: warn

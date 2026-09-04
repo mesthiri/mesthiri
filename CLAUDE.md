@@ -13,8 +13,8 @@ first); `docs/architecture.md` draws what design.md describes, as Mermaid
 diagrams — it is derived, never authoritative, so update it after design.md
 rather than instead of it; `docs/terminology.md` fixes one word per concept
 and lists the pairs that are easy to confuse — check it before inventing a
-name for something that already has one; `docs/guide.md` is the end-user
-experience,
+name for something that already has one; `docs/guide/` (one page per
+topic, `README.md` as its index) is the end-user experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
 was wrong; `README.md` is the public face. Keep all six in sync with
@@ -22,9 +22,9 @@ reality. M0-M9 have landed (`lib/mesthiri/*.sld`, 466 assertions), and
 `run-agent` really does spawn pi — `tests/test-agent-live.scm` drives a live
 process against a stub model server. What has **never** happened is a run
 against a real model, or against a real repository: no key, no adopter. The
-README and the guide must keep saying so, because a reader who takes the
-guide at face value expects verdicts that no one has yet seen mesthiri
-produce.
+README, the guide and the site's landing page must keep saying so,
+because a reader who takes the guide at face value expects verdicts
+that no one has yet seen mesthiri produce.
 
 `AGENTS.md` is a symlink to this file, so tools looking for either name get
 the same instructions. Edit this file, not the link. Note that an
@@ -122,6 +122,38 @@ symlink and would overwrite everything here.
   running it locally just saves you the round trip. The workflow is
   deliberately not path-filtered, so it is safe to mark as a required check;
   the reason is in a comment at the top of it.
+
+## Website
+
+mesthiri.org is the guide and a landing page, nothing else: the design
+documents stay on GitHub. MkDocs Material builds it from this repository —
+`mkdocs.yml` at the root, `docs/index.md` (rendered by
+`overrides/home.html`) and `docs/guide/`. `.github/workflows/site.yml`
+builds with `--strict` on every push and pull request, and deploys to
+GitHub Pages from `main`.
+
+```
+pip install -r requirements.txt   # pinned; the same pins as kaappi-lang.org
+mkdocs build --strict             # what CI runs; fails on any broken link
+mkdocs serve                      # http://127.0.0.1:8000
+```
+
+- Everything else under `docs/` is kept out by `exclude_docs`, so a guide
+  page that links to `terminology.md` or `design.md` with a relative link
+  fails the strict build. Link to the file on GitHub instead.
+- The nav in `mkdocs.yml` and the page list in `docs/guide/README.md` are
+  two copies of one list; `docs-sync` has the command that compares them.
+  A guide page missing from the nav fails the build
+  (`validation.nav.omitted_files: warn`).
+- `docs/assets` and `overrides/partials/mascot.html` are symlinks into
+  `assets/`, so the marks have one source (the second has a template name
+  because MkDocs copies any other file under `overrides/` to the site
+  root). The landing page inlines the mascot and recolours it for dark
+  mode with attribute selectors on its fill values — a redrawn mascot with
+  different hex values silently loses its dark variant on the site.
+- The landing page is prose too. It carries the status statement (no real
+  model, no real repository yet) in the guide's and README's own words
+  rather than a third phrasing, and `docs-sync` greps all three.
 
 ## Skills
 
