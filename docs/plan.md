@@ -332,23 +332,23 @@ third at tier 2 waiting for a human.
 
 ## M7 — Review and Fix
 
-- [ ] Review fires only on pull requests **mesthiri opened**, plus explicit
+- [x] Review fires only on pull requests **mesthiri opened**, plus explicit
       `/review`. `pull_request_target` fires for fork PRs, so reviewing
       everything lets anyone who can open one spend the repo's budget; the
       per-day cap is approximate and not a defence. An explicit `/review`
       on a foreign PR fetches the diff through the API into a read-only
       clone the agent cannot push from.
-- [ ] The review harness must not match the code harness: the other
+- [x] The review harness must not match the code harness: the other
       provider where two are declared, otherwise a different model. A
       config where they match is rejected at load.
-- [ ] Review on `pull_request_target` and `pull_request_review`: per-
+- [x] Review on `pull_request_target` and `pull_request_review`: per-
       dimension passes (correctness, security, performance, intent), each
       re-deriving the intent tier from the diff independently; adversarial
       verification before posting; findings as PR comments. No App holds
       approve or merge permission.
-- [ ] Fix: consume findings on mesthiri-authored PRs, push, re-run tests,
+- [x] Fix: consume findings on mesthiri-authored PRs, push, re-run tests,
       bounded depth, then hand to a human.
-- [ ] Stale-approval rule enforced: a new commit clears downstream labels.
+- [x] Stale-approval rule enforced: a new commit clears downstream labels.
 
 **Demo:** on the M6 pull request, review posts findings; `/fix` consumes
 them, pushes, and the tests re-run; a fresh commit visibly clears

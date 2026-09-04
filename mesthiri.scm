@@ -12,7 +12,8 @@
         (mesthiri version) (mesthiri agent) (mesthiri sandbox)
         (mesthiri harness) (mesthiri triage) (mesthiri labels)
         (mesthiri sweep) (mesthiri prioritize) (mesthiri code)
-        (mesthiri eligibility) (mesthiri git))
+        (mesthiri eligibility) (mesthiri git) (mesthiri review)
+        (mesthiri fix))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -364,6 +365,60 @@
                                                      (or (env "MESTHIRI_RUN_URL") "-"))))))
             (log-info "code: pull request opened")))))))))
 
+;; Review runs on pull requests mesthiri opened, plus an explicit /review.
+;; An explicit /review on a foreign pull request fetches the diff through the
+;; API into a read-only clone the agent cannot push from — the same sandbox
+;; minus any write path.
+(define (review-handler forge config event)
+  (let* ((repo (event-repo event))
+         (number (event-number event))
+         (mode (stage-mode (config-stage config 'review)))
+         (pr (forge-get forge (string-append "/repos/" repo "/pulls/"
+                                             (number->string number))))
+         (by-command? (and (decision-command-name) #t)))
+    (cond
+     ((eq? mode 'off) (log-info "review stage is off"))
+     ((and (not (mesthiri-authored? pr)) (not by-command?))
+      ;; Not a refusal to comment about: nobody asked.
+      (log-info "review: not a mesthiri pull request and no /review; skipping"))
+     (else
+      (let* ((hn (read-harness ".mesthiri" 'review))
+             (pname (or (harness-provider hn) (car (config-provider-names config))))
+             (model (harness-model hn))
+             (workdir (or (env "RUNNER_TEMP") "/tmp"))
+             (diff (forge-request-diff forge repo number))
+             (run (agent-runner hn pname model workdir #f)))
+        (for-each
+         (lambda (dim)
+           (guard (e (#t (log-warn "review pass " dim " failed; continuing")))
+             (let* ((raw (validate-output (run (dimension-prompt dim diff ""))
+                                          finding-schema))
+                    (tier (cdr (assoc "tier" raw)))
+                    (found (cdr (assoc "findings" raw)))
+                    ;; Each finding faces a separate attempt to refute it.
+                    (kept (filter-surviving run diff found)))
+               (if (eq? mode 'live)
+                   (post-comment forge event
+                                 (findings->comment dim kept tier tier))
+                   (log-info "review " dim ": " (length kept)
+                             " finding(s) [dry-run]")))))
+         review-dimensions))))))
+
+(define (filter-surviving run diff findings)
+  (let loop ((f findings) (acc '()))
+    (cond ((null? f) (reverse acc))
+          (else
+           (let ((r (guard (e (#t '(("refuted" . #f))))
+                      (run (refutation-prompt (car f) diff)))))
+             (loop (cdr f) (if (survives-refutation? r) (cons (car f) acc) acc)))))))
+
+(define (forge-request-diff forge repo number)
+  (guard (e (#t ""))
+    (let-values (((s h b) (forge-request forge "GET"
+                            (string-append "/repos/" repo "/pulls/"
+                                           (number->string number)))))
+      b)))
+
 (define (triage-handler forge config event)
   (let* ((repo (event-repo event))
          (st (config-stage config 'triage))
@@ -386,7 +441,8 @@
     (let-values (((forge cfg) (authed-forge 'reader)))
       (let* ((handlers (list (cons 'triage triage-handler)
                              (cons 'prioritize prioritize-handler)
-                             (cons 'code code-handler)))
+                             (cons 'code code-handler)
+                             (cons 'review review-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
                   " stage=" (or (decision-stage d) "-")
