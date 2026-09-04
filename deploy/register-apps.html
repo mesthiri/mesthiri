@@ -16,9 +16,35 @@
 
 <h1>Register mesthiri's two GitHub Apps</h1>
 
-<p>Two Apps, so the stages that only read code cannot write it. Each button
-opens GitHub's App creation page with the name and permissions already filled
-in — you review and confirm.</p>
+<p>Two Apps, so the stages that only read code cannot write it.</p>
+
+<div class="warn">
+<b>Use the manual route below.</b> The manifest buttons further down do
+pre-fill the permissions, but GitHub's manifest flow does not finish there:
+confirming issues a temporary <code>code</code>, and the App is only actually
+created when that code is exchanged at
+<code>POST /app-manifests/{code}/conversions</code> — an exchange that
+returns the App's private key. That is one more step than filling the form in
+by hand, and it puts a private key through an extra hop. Verified the hard
+way: two confirmations produced two codes and zero Apps.
+</div>
+
+<h2>The route that works</h2>
+<p>For each App, go to
+<a href="https://github.com/organizations/mesthiri/settings/apps/new">Settings
+&rarr; Developer settings &rarr; New GitHub App</a> in the
+<code>mesthiri</code> org and fill in:</p>
+<ul>
+<li><b>Name</b> — <code>mesthiri-reader</code> / <code>mesthiri-writer</code></li>
+<li><b>Homepage URL</b> — <code>https://github.com/mesthiri/mesthiri</code></li>
+<li><b>Webhook &rarr; Active</b> — <b>uncheck it.</b> It is checked by default,
+    and mesthiri receives events through your Actions workflow, not the App.
+    Unchecking also clears the required Webhook URL field.</li>
+<li><b>Repository permissions</b> — set the four in the tables below and leave
+    every other one at "No access".</li>
+</ul>
+<p>The App is created immediately, and its settings page has both the
+<b>App ID</b> and <b>Generate a private key</b>.</p>
 
 <div class="note">
 <b>Neither App has a webhook.</b> mesthiri receives events through the
@@ -36,7 +62,7 @@ that calls the merge endpoint, and on your branch protection. Keep branch
 protection on: it is the control that actually enforces this.
 </div>
 
-<h2>1. mesthiri-reader</h2>
+<h2>Permissions: mesthiri-reader</h2>
 <p>Used by triage, prioritize, review and retro.</p>
 <table><tr><th>Permission</th><th>Level</th><th>Why</th></tr>
 <tr><td>Issues</td><td>write</td><td>comments and labels</td></tr>
@@ -44,11 +70,11 @@ protection on: it is the control that actually enforces this.
 <tr><td>Contents</td><td><b>read</b></td><td>read code and the rubric — cannot write</td></tr>
 <tr><td>Metadata</td><td>read</td><td>mandatory</td></tr></table>
 <form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
-  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-reader&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;issues&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;contents&quot;: &quot;read&quot;, &quot;metadata&quot;: &quot;read&quot;}}">
+  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-reader&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;issues&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;contents&quot;: &quot;read&quot;, &quot;metadata&quot;: &quot;read&quot;}, &quot;redirect_url&quot;: &quot;http://127.0.0.1:8791/created.html&quot;}">
   <button type="submit">Create mesthiri-reader</button>
 </form>
 
-<h2>2. mesthiri-writer</h2>
+<h2>Permissions: mesthiri-writer</h2>
 <p>Used by the code and fix stages.</p>
 <table><tr><th>Permission</th><th>Level</th><th>Why</th></tr>
 <tr><td>Contents</td><td>write</td><td>push a branch and commits</td></tr>
@@ -56,7 +82,7 @@ protection on: it is the control that actually enforces this.
 <tr><td>Issues</td><td>write</td><td>state comments on the issue</td></tr>
 <tr><td>Metadata</td><td>read</td><td>mandatory</td></tr></table>
 <form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
-  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-writer&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: code and fix. Pushes branches and opens pull requests.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;contents&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;issues&quot;: &quot;write&quot;, &quot;metadata&quot;: &quot;read&quot;}}">
+  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-writer&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: code and fix. Pushes branches and opens pull requests.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;contents&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;issues&quot;: &quot;write&quot;, &quot;metadata&quot;: &quot;read&quot;}, &quot;redirect_url&quot;: &quot;http://127.0.0.1:8791/created.html&quot;}">
   <button type="submit">Create mesthiri-writer</button>
 </form>
 
