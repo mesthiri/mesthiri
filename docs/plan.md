@@ -88,8 +88,17 @@ Everything here runs locally against fixtures. Nothing touches CI yet.
       handling here and nowhere else.
 - [ ] `lib/mesthiri/log.sld` — every line carries stage, repo and run URL.
 
-**Demo:** `mesthiri inspect <owner/repo>` reads a public repo and prints
-what it would consider actionable. Tests run against recorded fixtures.
+**Demo:** `mesthiri whoami` mints a real installation token from the App key
+and prints which installation it is, the permissions it holds and the
+remaining rate limit. That exercises the whole milestone in one command —
+`config.sld` for the App IDs and key path, `jwt.sld` signing through
+`openssl`, `forge.sld` for auth and rate-limit headers — and it puts the
+riskiest piece first: RS256 through a subprocess is the part of M1 with no
+precedent in the Kaappi ecosystem to copy from.
+
+`event.sld` and `trigger.sld` are covered by tests over recorded fixtures
+rather than a command. Printing a matched stage is `explain-event`'s job and
+it belongs with dispatch in M2, where there is a real event to explain.
 
 ## M2 — Dispatch: the first thing that runs in CI
 
