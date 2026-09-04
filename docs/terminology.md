@@ -53,6 +53,12 @@ forms over a fixed vocabulary, composed with `and`/`or` — the code stage's
 is `(or (label "ready-to-implement") (command "/implement"))`.
 **Interpreted, never `eval`ed**.
 
+**Schedule** — a stage's `(schedule …)` trigger: a whole-hour UTC time,
+optionally preceded by a weekday (`"07:00"`, `"sunday 06:00"`). The shim
+carries one hourly tick and dispatch matches it against these, so changing a
+schedule is a config edit rather than a workflow change. GitHub's scheduler
+is best-effort, so a delayed tick runs its stages late rather than never.
+
 **Command** — a slash command in a comment: `/triage`, `/implement`,
 `/review`, `/fix`, `/retro`. Parsed by a plain grammar, never by a model.
 `/triage` and `/implement` are issue commands; `/review` and `/fix` are

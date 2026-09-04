@@ -64,10 +64,11 @@ subscribes to native triggers (`issues`, `issue_comment`,
 `pull_request_target`, `pull_request_review`) plus a single hourly
 `schedule` tick, and does nothing but call the reusable workflow. It is
 deliberately small so that upgrades ship upstream rather than through a
-pull request to every repo. Stage schedules live in `config.scm` as
-whole-hour UTC times; dispatch matches each tick against them and runs
-whatever is due, so a schedule change is a config edit and the shim never
-changes. GitHub's scheduler is best-effort — a delayed tick runs its
+pull request to every repo. Stage schedules live in `config.scm` as a
+whole-hour UTC time — `"07:00"` — optionally qualified by a weekday for
+something that need not run daily — `"sunday 06:00"`. Dispatch matches each
+tick against them and runs whatever is due, so a schedule change is a config
+edit and the shim never changes. GitHub's scheduler is best-effort — a delayed tick runs its
 stages late rather than never.
 
 **PR events use `pull_request_target`, and the shim never checks out the
@@ -165,7 +166,8 @@ run enforces it on itself. A cap *across* runs has nowhere to keep a
 counter, so it is derived instead: before starting an expensive stage, a job
 queries recent workflow runs and their traces and declines if the day's
 spend already looks exhausted. The per-day cap counts **runs started**;
-schedules are whole-hour UTC, matched against the shim's hourly tick.
+schedules are whole-hour UTC, optionally weekday-qualified, matched against
+the shim's hourly tick.
 Approximate, lagging, and defeatable by
 concurrent jobs starting at once — good enough to stop a runaway, not to
 bill against. The alternative was a database, and the database was the thing

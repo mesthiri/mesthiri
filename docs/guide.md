@@ -271,11 +271,12 @@ code and a fork carries a copy. It is s-expressions, read as data.
 ```
 
 The expressions after `on` are predicates over the event, drawn from a
-fixed vocabulary of short forms, with schedules as whole-hour UTC times.
-They are interpreted, not evaluated — a config file cannot become a
-program. The shim carries a single hourly tick and dispatch matches it
-against these schedules, so changing one is a config edit, not a pull
-request. This sample is the scaffold contract: `install` produces it, down
+fixed vocabulary of short forms. A schedule is a whole-hour UTC time,
+optionally preceded by a weekday — `"07:00"` every day, `"sunday 06:00"`
+once a week. They are interpreted, not evaluated — a config file cannot
+become a program. The shim carries a single hourly tick and dispatch
+matches it against these schedules, so changing one is a config edit, not a
+pull request. This sample is the scaffold contract: `install` produces it, down
 to the deny-paths, `max-tier 0`, budgets and pinned versions.
 
 ## Choosing models

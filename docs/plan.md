@@ -90,7 +90,8 @@ The heart of the re-architecture. Until this works, nothing else can.
       stage. One event, one stage, one job.
 - [ ] The shim workflow, in `templates/`: native triggers plus a single
       hourly `schedule` tick — dispatch matches the tick against each
-      stage's configured whole-hour UTC schedule — calling the reusable
+      stage's configured schedule, a whole-hour UTC time optionally
+      qualified by a weekday — calling the reusable
       workflow and nothing else. **PR events use
       `pull_request_target` and the shim never checks out the PR's code** —
       a test asserts the template contains no such checkout, because the
