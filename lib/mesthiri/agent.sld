@@ -34,7 +34,7 @@
           validate-output output-error? output-error-message
           run-agent write-trace agent-final-text
           run-record-text agent-env write-agent-home!
-          frame-refusal stderr-tail)
+          frame-refusal frame-error stderr-tail)
   (begin
 
     ;; --- spawn arguments ---------------------------------------------------
@@ -100,7 +100,7 @@
     ;; path is tested against the recorded fixture without spawning anything.
     (define (fold-frames frames budget)
       (let loop ((f frames) (turns 0) (tokens 0) (model #f) (text #f)
-                 (n 0) (outcome 'incomplete))
+                 (n 0) (outcome 'incomplete) (err #f))
         (cond
          ((null? f) (make-run-record outcome turns tokens model n text))
          (else
@@ -110,13 +110,22 @@
                  (u (frame-usage fr))
                  (tokens (if u u tokens))
                  (text (or (frame-text fr) text))
+                 ;; Captured in the same pass as everything else. Doing it in
+                 ;; a branch of its own skipped the model and the token count
+                 ;; on exactly the frames that carry them, because a failed
+                 ;; turn is still a turn_end.
+                 (err (or (frame-error fr) err))
                  (model (or model (frame-model fr))))
             (cond
              ((budget-exceeded? budget turns tokens)
               (make-run-record 'over-budget turns tokens model (+ n 1) text))
              ((terminal-frame? fr)
-              (make-run-record 'settled turns tokens model (+ n 1) text))
-             (else (loop (cdr f) turns tokens model text (+ n 1) outcome))))))))
+              ;; Settled, but every turn failed at the provider: that is a
+              ;; model error, and the provider's words are the record's text.
+              (if (and err (not text))
+                  (make-run-record 'model-error turns tokens model (+ n 1) err)
+                  (make-run-record 'settled turns tokens model (+ n 1) text)))
+             (else (loop (cdr f) turns tokens model text (+ n 1) outcome err))))))))
 
     ;; turn_end's message carries the model that actually ran, which is what
     ;; the Generated-by trailer should record — taking it from here rather
@@ -301,7 +310,8 @@
                                (cons "message" prompt))) in)
           (write-string "\n" in)
           (flush-output-port in)
-          (let loop ((frames '()) (turns 0) (tokens 0) (model #f) (text #f))
+          (let loop ((frames '()) (turns 0) (tokens 0) (model #f) (text #f)
+                     (err #f))
             (let ((line (read-line out)))
               (cond
                ((eof-object? line)
@@ -311,7 +321,7 @@
                 ;; of the message a maintainer will read.
                 (finish proc errp frames turns tokens model text
                         (if (car timed-out) 'deadline 'eof)
-                        trace-path stderr-path))
+                        trace-path stderr-path err))
                (else
                 (let* ((fr (guard (e (#t #f)) (json-read-string line)))
                        (refusal (and fr (frame-refusal fr)))
@@ -321,6 +331,7 @@
                        (u (and fr (frame-usage fr)))
                        (tokens (or u tokens))
                        (text (or (and fr (frame-text fr)) text))
+                       (err (or (and fr (frame-error fr)) err))
                        (model (or model (and fr (frame-model fr)))))
                   (cond
                    ;; pi answers a command it cannot run with a `response`
@@ -332,17 +343,36 @@
                    ;; unconfigured provider: "No API key found for deepseek".
                    (refusal
                     (process-kill proc 'group: #t)
-                    (let ((rec (finish proc errp frames turns tokens model
-                                       refusal 'refused trace-path stderr-path)))
-                      rec))
+                    (finish proc errp frames turns tokens model refusal 'refused
+                            trace-path stderr-path err))
                    ((budget-exceeded? budget turns tokens)
                     (process-kill proc 'group: #t)
                     (finish proc errp frames turns tokens model text
-                            'over-budget trace-path stderr-path))
+                            'over-budget trace-path stderr-path err))
                    ((and fr (terminal-frame? fr))
+                    ;; Settled with no text but an error on every turn is a
+                    ;; provider failure, not an empty answer.
                     (finish proc errp frames turns tokens model text
-                            'settled trace-path stderr-path))
-                   (else (loop frames turns tokens model text)))))))))))
+                            (if (and err (not text)) 'model-error 'settled)
+                            trace-path stderr-path err))
+                   (else (loop frames turns tokens model text err)))))))))))
+
+    ;; A turn that failed at the provider carries `stopReason: "error"` and
+    ;; the provider's own message on `turn_end`. pi then retries, up to three
+    ;; times, and finally settles — so the run reaches `agent_settled` with
+    ;; every assistant message empty. Without this, that arrives as "the agent
+    ;; settled without producing any text", which describes the symptom and
+    ;; hides the cause. The first real run against a real model hit exactly
+    ;; this: `429 Insufficient balance or no resource package`.
+    (define (frame-error f)
+      (let ((m (assoc "message" f)))
+        (and m (pair? (cdr m))
+             (let ((sr (assoc "stopReason" (cdr m)))
+                   (em (assoc "errorMessage" (cdr m))))
+               (and sr (equal? (cdr sr) "error")
+                    (if (and em (string? (cdr em)))
+                        (cdr em)
+                        "the provider rejected the request without saying why"))))))
 
     ;; pi reports a command it will not run as
     ;;   {"type":"response","command":"prompt","success":false,"error":"…"}
@@ -358,14 +388,18 @@
                         "pi refused the command without saying why"))))))
 
     (define (finish proc errp frames turns tokens model text outcome
-                    trace-path stderr-path)
+                    trace-path stderr-path err)
       (guard (e (#t #f)) (process-kill proc 'group: #t))
       ;; Reap it. Without this the child is a zombie for the life of the job,
       ;; and on a self-hosted runner that is a leak rather than a curiosity.
       (guard (e (#t #f)) (process-wait proc))
       (if errp (guard (e (#t #f)) (close-output-port errp)))
       (if trace-path (write-trace trace-path (reverse frames)))
-      (make-run-record outcome turns tokens model (length frames) text))
+      (make-run-record outcome turns tokens model (length frames)
+                       ;; A model-error run has no answer; its text is the
+                       ;; provider's complaint, which is what a maintainer
+                       ;; needs to read.
+                       (if (eq? outcome 'model-error) err text)))
 
     ;; What the agent said on stderr, for the failure message. pi is quiet
     ;; when it works, so anything here is worth reading — and an outcome of

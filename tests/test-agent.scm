@@ -119,6 +119,36 @@
              (if (eof-object? l) n
                  (begin (json-read-string l) (loop p (+ n 1)))))))
 
+
+;; --- a recorded failure from a real provider -------------------------------
+;;
+;; This fixture is not written; it is the trace of mesthiri's first run
+;; against a real model, with the prompt elided. z.ai answered 429
+;; "Insufficient balance", pi retried three times with backoff and then
+;; settled — so the run reaches its terminal frame with every assistant
+;; message empty. mesthiri reported "the agent settled without producing any
+;; text", which is the symptom and not the cause, and crashed on it.
+(define recorded
+  (call-with-input-file "tests/support/trace-insufficient-balance.jsonl"
+    (lambda (p)
+      (let loop ((acc '()))
+        (let ((l (read-line p)))
+          (if (eof-object? l)
+              (reverse acc)
+              (loop (if (> (string-length l) 0)
+                        (cons (json-read-string l) acc)
+                        acc))))))))
+
+(check "the recorded trace is the whole run" 32 (length recorded))
+(define rrec (fold-frames recorded '((tokens . 200000) (turns . 40))))
+(check "a run that failed at the provider is not reported as settled"
+       'model-error (run-record-outcome rrec))
+(check "and the provider's own words are what comes back"
+       #t (has? (run-record-text rrec) "Insufficient balance"))
+(check "the model that ran is still recorded" "glm-5.3" (run-record-model rrec))
+;; pi's retries are turns, and they are what a budget has to stop.
+(check "each retry counts as a turn" 4 (run-record-turns rrec))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))

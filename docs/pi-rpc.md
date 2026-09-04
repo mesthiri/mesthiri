@@ -128,6 +128,32 @@ the shape it is standing in for is worse than no sample.
 without checking the role hands back the prompt as though the agent had said
 it.
 
+### A turn that failed at the provider
+
+`turn_end` carries `stopReason: "error"` and the provider's message:
+
+```json
+{"type":"turn_end","message":{"role":"assistant","model":"glm-5.3",
+ "content":[], "stopReason":"error",
+ "errorMessage":"429: {\"code\":\"1113\",\"message\":\"Insufficient balance…\"}"}}
+```
+
+pi then emits `agent_end` with `willRetry: true`, an `auto_retry_start`
+carrying `attempt`, `maxAttempts` and `delayMs` (3 attempts, 2s/4s/8s), and
+starts again. After the last one it settles normally.
+
+So **a run whose every call failed still reaches `agent_settled`**, with
+every assistant `content` empty and `usage` all zeroes. Reported as-is that
+is "the agent settled without producing any text" — the symptom, with the
+cause sitting in the trace. mesthiri reports `model-error` and carries the
+provider's own words out, because an expired key, a rate limit and an empty
+account are three problems with three different fixes.
+
+Observed on the first run against a real model, 2026-09-04. The recorded
+trace is `tests/support/trace-insufficient-balance.jsonl` and is a test
+fixture: a trace of something that actually happened beats one written from
+a description of it.
+
 ### Noise to ignore
 
 ```json

@@ -266,6 +266,12 @@
 (define (agent-failure-detail rec stderr-path)
   (case (run-record-outcome rec)
     ((refused) (string-append " — pi refused it: " (or (run-record-text rec) "")))
+    ;; The provider answered, and what it answered was a complaint. Its own
+    ;; words: an expired key, a rate limit and an empty account are three
+    ;; different problems with three different fixes.
+    ((model-error)
+     (string-append " — the model provider rejected the request: "
+                    (or (run-record-text rec) "")))
     ((deadline) " — the wall-clock deadline killed it; the model may be hanging")
     (else (let ((tail (stderr-tail stderr-path 400)))
             (if (> (string-length tail) 0)
