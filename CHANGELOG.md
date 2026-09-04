@@ -9,6 +9,31 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-09-04
+
+Cut from what the first run against a real model showed.
+
+### Fixed
+
+- **A provider failure is reported as one.** pi retries a turn that failed at
+  the provider three times with backoff and then settles normally, so a run
+  whose every call failed still reaches `agent_settled` with empty messages
+  and zero usage. mesthiri reported "the agent settled without producing any
+  text" and crashed on it — the symptom, while the cause sat in the trace it
+  had just uploaded. The outcome is now `model-error` and it carries the
+  provider's own words, because an expired key, a rate limit and an empty
+  account are three problems with three different fixes.
+
+### Changed
+
+- `tests/run-all.sh` fails when a test **raises**. kaappi prints the error,
+  abandons that top-level form and carries on, so the assertion never runs,
+  the counters never see it, and the file still exits 0. That had already
+  happened once without being noticed.
+- `docs/pi-rpc.md` gains the failed-turn shape and pi's retry sequence, and
+  the fixture for it is a recorded trace of a real run rather than one
+  written from a description of one.
+
 ## [0.1.3] — 2026-09-04
 
 The release that makes mesthiri able to do anything at all.
