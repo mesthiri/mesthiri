@@ -381,13 +381,24 @@ stage that spent its budget without reaching green.
       scaffolded config matches the guide's sample (App IDs, deny-paths,
       `max-tier 0`, budgets, pinned versions). The layering idea is
       fullsend's ADR 0006.
-- [ ] Release automation: build the standalone binary for Linux x86_64 and
-      arm64 plus macOS arm64 for local `try` and `install`, publish with
-      SHA256SUMS, and pin it in the reusable workflow. The build is
-      `kaappi --compile` with explicit `--lib-path`s followed by
-      `zig build -Dbundle=<sbc>`; `-Dbundle-src=` compiles with no library
-      path and mesthiri's modules do not resolve under it. Until this lands,
-      `.claude/skills/release` is the process, written out manually. Layered
+- [x] Release automation: `.github/workflows/release.yml` builds Linux
+      x86_64 and arm64 plus macOS arm64, smoke-tests each, and publishes with
+      SHA256SUMS on a tag push.
+
+      It is a **matrix of native builds, not cross-compilation**, and that is
+      forced rather than chosen: kaappi stamps bytecode with
+      `compilerHashFor(version, build_id, target)` and refuses a mismatch at
+      startup, so a `.sbc` must be compiled by a kaappi built for the same
+      target as the binary embedding it. A macOS-built bundle will not run in
+      a Linux binary however it is cross-built. The error prints only the
+      build id, so the two sides read as identical and it still refuses —
+      which is why this is written down.
+
+      Two more traps the workflow guards: the C-FFI shared objects must be
+      installed before the bundle is compiled, or the compile writes a
+      truncated `.sbc` (~46 KB against ~128 KB) as well as exiting non-zero;
+      and `zig build -Dbundle=` overwrites `zig-out/bin/kaappi`, so the plain
+      kaappi used as the compiler is copied aside first. Layered
       distribution means a fix here reaches installed repos without
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.

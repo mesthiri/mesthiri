@@ -1,0 +1,179 @@
+# mesthiri — release
+#
+# Builds one artifact per platform and publishes them with SHA256SUMS.
+#
+# WHY A MATRIX RATHER THAN CROSS-COMPILATION: kaappi stamps bytecode with
+# compilerHashFor(version, build_id, target) and refuses a mismatch at
+# startup, so a .sbc must be compiled by a kaappi built for the *same* target
+# as the binary that embeds it. A macOS-built bundle will not run in a Linux
+# binary however it is cross-built, and the error prints only the build id —
+# so it reads as "build id X; this binary is X", identical and still refused.
+# Each artifact is therefore built natively on its own runner, with no
+# -Dtarget anywhere.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (must already exist)'
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  KAAPPI_VERSION: v0.26.1
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            artifact: mesthiri-x86_64-linux
+            ext: so
+          - runner: ubuntu-24.04-arm
+            artifact: mesthiri-aarch64-linux
+            ext: so
+          - runner: macos-latest
+            artifact: mesthiri-aarch64-macos
+            ext: dylib
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Zig
+        uses: xyzzylabs/setup-zig@df7066a4910fe13f4643390dbbd8ce6a785fff63 # v1.0.3
+        with:
+          version: 0.16.0
+
+      - name: OpenSSL headers (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Check out kaappi and the ecosystem libraries
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$KAAPPI_VERSION" https://github.com/kaappi/kaappi ../kaappi
+          for r in kaappi-json kaappi-http kaappi-net; do
+            git clone --depth 1 "https://github.com/kaappi/$r" "../$r"
+          done
+
+      # kaappi-net and kaappi-http are C-FFI libraries. Their shared objects
+      # must be where the loader looks BEFORE the bundle is compiled: without
+      # them the compile still writes a .sbc, just a truncated one (~46 KB
+      # against ~128 KB), because the FFI imports fail to resolve. It does
+      # exit non-zero, which is what actually catches it — but the file being
+      # written anyway is why the size is checked too.
+      - name: Build the FFI libraries and install them where the loader looks
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.kaappi/lib
+          for r in kaappi-net kaappi-http; do
+            make -C "../$r"
+            cp "../$r/lib${r//-/_}.${{ matrix.ext }}" ~/.kaappi/lib/
+          done
+          ls -la ~/.kaappi/lib/
+
+      # -Dbundle= overwrites zig-out/bin/kaappi with the bundled binary, so
+      # the plain kaappi used as the compiler is copied aside first. Without
+      # that, the next compile runs mesthiri and prints its usage, which looks
+      # like a broken build rather than the wrong binary.
+      - name: Build a plain kaappi to compile with
+        run: |
+          set -euo pipefail
+          cd ../kaappi
+          zig build -Doptimize=ReleaseSafe
+          cp zig-out/bin/kaappi "$RUNNER_TEMP/kaappi-plain"
+          "$RUNNER_TEMP/kaappi-plain" --version
+
+      - name: Compile the bundle
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/kaappi-plain" \
+            --lib-path ./lib \
+            --lib-path ../kaappi-json/lib \
+            --lib-path ../kaappi-http/lib \
+            --lib-path ../kaappi-net/lib \
+            --compile -o "$RUNNER_TEMP/mesthiri.sbc" mesthiri.scm
+          size=$(wc -c < "$RUNNER_TEMP/mesthiri.sbc")
+          echo "bundle: $size bytes"
+          # A truncated bundle means an import did not resolve. The exit code
+          # above catches that too; this catches a future failure mode that
+          # forgets to.
+          if [ "$size" -lt 100000 ]; then
+            echo "::error::bundle is $size bytes, expected >100000 — an import did not resolve"
+            exit 1
+          fi
+
+      - name: Embed it
+        run: |
+          set -euo pipefail
+          cd ../kaappi
+          zig build -Dbundle="$RUNNER_TEMP/mesthiri.sbc" -Doptimize=ReleaseSafe
+          cp zig-out/bin/kaappi "$RUNNER_TEMP/${{ matrix.artifact }}"
+
+      # Every artifact is smoke-tested on its own platform, which is only
+      # possible because each is built natively. `--version` must print the
+      # version and not the usage text: argv handling differs between running
+      # as a script and as a bundled binary, and that was a real bug.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/${{ matrix.artifact }}"
+          chmod +x "$bin"
+          v=$("$bin" --version)
+          echo "version: $v"
+          case "$v" in
+            *" "*|"") echo "::error::--version printed something other than a bare version: $v"; exit 1 ;;
+          esac
+          "$bin" > /dev/null 2>&1 || true   # no args prints usage and exits 1
+          "$bin" explain-event 2>&1 | head -1 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # the only job that needs it
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # SHA256SUMS is load-bearing: the reusable workflow verifies against it
+      # before chmod +x, so a missing or wrong one fails every installed
+      # repository's next run rather than degrading.
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          chmod +x mesthiri-*
+          sha256sum mesthiri-* > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes=$(awk '/^## \[/{n++} n==2{exit} n==1' CHANGELOG.md | tail -n +2)
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --notes "${notes:-See CHANGELOG.md}"

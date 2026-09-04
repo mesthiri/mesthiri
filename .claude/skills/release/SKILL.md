@@ -235,10 +235,19 @@ gh run list --repo mesthiri/sandbox --limit 3
 
 Or provoke one: comment `/triage` on a sandbox issue and watch the run.
 
-## Not yet automated
+## Steps 4–7 are automated
 
-There is no `release.yml` — Step 4's cross-compilation and Step 7's upload
-are M9 work (`plan.md`, "Release automation"). Until it exists this skill is
-the process, and the manual steps are written out rather than gestured at.
-When the workflow lands, Steps 4–7 collapse into pushing a tag, and Steps 8–9
-stay exactly as they are: they are judgement, not automation.
+`.github/workflows/release.yml` does the building, checksumming and
+publishing: pushing a tag is the whole of it. It builds each artifact
+natively on its own runner, for the cross-compilation reason above, and
+smoke-tests each one on the platform it was built for.
+
+Steps 4–6 above are still worth reading, because they are what the workflow
+does and what its failures mean. Run them by hand only when debugging the
+workflow.
+
+**Steps 8, 9 and 10 are not automated and should not be**, because they are
+judgement rather than mechanism: whether the published artifact is good,
+whether to point every installed repository at it, and whether a real
+repository still works afterwards. A workflow that rolled itself out would
+remove the only gap in which a bad release harms nobody.

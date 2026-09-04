@@ -7,10 +7,11 @@ needs — so the log is the source and `[Unreleased]` stays empty by design.
 The format follows [Keep a Changelog](https://keepachangelog.com/1.1.0/), and
 this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — drafted for 0.1.0, not published
+## [Unreleased]
 
-Drafted and then held: the Linux artifacts cannot be built on macOS (see
-below). First release. The plumbing and the dispatch path, with no stage behind them
+## [0.1.0] — 2026-09-04
+
+First release. The plumbing and the dispatch path, with no stage behind them
 yet — see *Known limitations*.
 
 ### Added
