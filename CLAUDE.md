@@ -31,6 +31,15 @@ symlink and would overwrite everything here.
 - Kaappi Scheme, 2-space indentation, R7RS style (same as the kaappi org).
 - Commits: short imperative subject, body explains why, `git commit -s`
   (DCO trailer required).
+- **A failed edit must stop the commit.** Doc edits here are usually a
+  `python3 - <<'PY'` block that asserts on the text it expects to replace.
+  When that assertion fails it exits non-zero and prints a traceback — and a
+  `git commit` on the *next line* runs anyway, committing whatever else
+  changed under a message describing an edit that is not in the diff. That
+  has happened: `6f7647e` claimed a preamble said something it did not, and
+  `794f0da` had to correct the record. Chain the edit and the commit with
+  `&&`, or read `git diff` before writing the message. Separate lines are
+  the natural way to type it, which is exactly why this needs saying.
 - Library code under `lib/mesthiri/*.sld`, entry point `mesthiri.scm`,
   tests under `tests/` runnable as
   `kaappi --lib-path ./lib tests/test-<module>.scm`.
@@ -95,6 +104,10 @@ with the work rather than living in one session's head:
 
 Both end by updating themselves, which is the point: a lesson left in a
 commit message is one the next session repeats.
+
+Skills are discovered when a session starts, so one added mid-session is not
+invokable until it registers — the file is on disk and the tool call still
+says unknown skill. Follow the written procedure by hand until it appears.
 
 ## Related work
 
