@@ -7,6 +7,10 @@
 > captured. When something here turns out to be wrong once it is real,
 > the guide is what changes first.
 
+If a word here is unfamiliar or looks like it might mean two things,
+[terminology.md](terminology.md) defines it — including the several that
+genuinely are easy to confuse.
+
 ## What you get
 
 A repository that triages its own issues, implements the small ones, and

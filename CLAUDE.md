@@ -11,7 +11,10 @@ design authority; `docs/plan.md` sequences it into milestones (M0–M9 —
 check its boxes as work lands, and route scope changes through design.md
 first); `docs/architecture.md` draws what design.md describes, as Mermaid
 diagrams — it is derived, never authoritative, so update it after design.md
-rather than instead of it; `docs/guide.md` is the end-user experience,
+rather than instead of it; `docs/terminology.md` fixes one word per concept
+and lists the pairs that are easy to confuse — check it before inventing a
+name for something that already has one; `docs/guide.md` is the end-user
+experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
 was wrong; `README.md` is the public face. Keep all five in sync with

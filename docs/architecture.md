@@ -199,6 +199,11 @@ stateDiagram-v2
   needs_human --> [*]: human takes over
 ```
 
+The state names are drawn with underscores because Mermaid's state diagrams
+want them that way; the labels themselves are hyphenated —
+`ready-for-triage`, not `ready_for_triage`. [terminology.md](terminology.md)
+has the canonical spelling.
+
 The rule that earns the machine its keep is not drawn as a transition
 because it applies from almost everywhere: **a new commit clears every
 downstream label**, so a `ready_for_merge` earned by one head cannot survive

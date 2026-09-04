@@ -2,8 +2,9 @@
 
 Status: draft, 2026-08-29; substantially revised 2026-09-04, when the
 execution model changed from a self-hosted service to CI-native dispatch.
-This document is the design authority — [plan.md](plan.md) sequences it and
-[architecture.md](architecture.md) draws it.
+This document is the design authority — [plan.md](plan.md) sequences it,
+[architecture.md](architecture.md) draws it, and
+[terminology.md](terminology.md) fixes what each thing is called.
 
 **Inspiration.** The CI-native execution model, the layered install, the
 per-role identity split and the harness-as-configuration idea are all
