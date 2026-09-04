@@ -77,6 +77,15 @@ jobs:
           npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
           pi --version
 
+      - name: Capture the event
+        continue-on-error: true
+        run: cp "${{ github.event_path }}" /tmp/event.json
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: event-${{ github.run_id }}
+          path: /tmp/event.json
+
       - name: Dispatch
         env:
           MESTHIRI_READER_KEY: ${{ secrets.reader-key }}
