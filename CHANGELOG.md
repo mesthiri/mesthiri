@@ -9,6 +9,48 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-09-04
+
+The release that makes mesthiri able to do anything at all.
+
+### Added
+
+- **`run-agent` spawns pi for real.** It always looked as though it did, and
+  it never had: every test drove a stage through an injected runner, which
+  proves the caller and not the thing being called. A live pi process is now
+  driven over its RPC protocol by `tests/test-agent-live.scm`, against a stub
+  model server on localhost — a run that settles, a model that hangs until
+  the deadline kills the process group, and a prompt pi refuses. CI installs
+  the pinned pi so it runs on every push.
+- **The reusable workflow installs pi.** It downloaded the mesthiri binary
+  and not the agent, so an installed repository authorized its event, matched
+  a stage, and then failed at the point of the exercise.
+- **`mesthiri install`, `uninstall` and `apps create`.** Installing declares
+  five layers once — config, rubric, harnesses, labels, workflow — installs
+  them forward, removes them in reverse, and reports which are present.
+  Every file change arrives as a pull request.
+
+### Fixed
+
+- **The agent inherited the CI job's entire environment**, App private keys
+  and forge token included. The design said the agent holds no credential and
+  named the mount namespace as the mechanism, but a child inherits its
+  parent's environment regardless of what is mounted. The agent's environment
+  is now constructed rather than inherited.
+- **A prompt pi refuses no longer hangs the run.** pi answers `success:false`
+  and then waits for another command forever; the drive loop watched only for
+  `agent_settled`, against a wall-clock deadline that was accepted as a
+  parameter and never implemented. Both halves are real now, and a refusal
+  comes back in pi's own words.
+- **The agent's reply is read from the right shape and the right role.**
+  `message.content` is a list of blocks, not a string, and `message_end`
+  fires for the user's message too — so every real run would have ended at
+  "the agent settled without producing any text", or handed the prompt back
+  as though the agent had said it.
+- **A trailing slash in a provider endpoint is stripped**, since pi appends
+  `/chat/completions` to it. z.ai's own documentation writes the endpoint
+  with the slash.
+
 ## [0.1.2] — 2026-09-04
 
 ### Fixed
