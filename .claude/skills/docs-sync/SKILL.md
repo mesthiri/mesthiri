@@ -128,6 +128,20 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
     behind it: `ls lib/mesthiri/*.sld | wc -l`, `grep -c "\[ \]" docs/plan.md`.
 
 
+17. **A fixture that abbreviates the shape it stands in for.**
+    `docs/pi-rpc.md` showed `message.content` as a string where it is a list
+    of blocks. Code written against the document was wrong, and the tests
+    written from the same document agreed with it — so the suite was green
+    and every real run would have failed. A sample that simplifies is worse
+    than no sample: it is believed. Where a document abbreviates, it must
+    say so.
+18. **A parameter accepted and never used.** `run-agent` took
+    `deadline-secs`, documented enforcing it in a comment above the function,
+    and did nothing with it. Nothing reads as more implemented than a
+    parameter with a comment. Grep any newly-documented mechanism for a use
+    of its own argument.
+
+
 ## Report and record
 
 Report only what a command established, most severe first: contradictions

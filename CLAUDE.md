@@ -86,6 +86,21 @@ symlink and would overwrite everything here.
   outside the vocabulary parses as an ordinary list and is refused only at
   run time, so reading the document cannot catch it
   (`tests/test-guide-config.scm`).
+- **A protocol recorded by probing is half a protocol.** Probing pi found
+  the frame *names*; the first run driven to completion found the frame
+  *shapes*, and three of them were wrong — `message.content` is a list of
+  blocks rather than a string, `message_end` fires for the user's message
+  too, and a refused command is answered with `success:false` and then
+  silence rather than a terminal frame. Each failed silently and each was
+  invisible to fixtures written from the recon. Drive the real thing before
+  writing code against notes about it, and when a document abbreviates a
+  shape, say in the document that it is abbreviated.
+- **A deadline needs a fiber, not a SRFI-18 thread.** A kaappi process is
+  owned by the heap that created it, so `process-kill` from a thread raises:
+  the watchdog reports that it fired, kills nothing, and the run hangs
+  anyway. Fibers (`(kaappi fibers)` `spawn`) share the heap, and a blocking
+  `read-line` parks the fiber rather than stalling the scheduler, which is
+  what lets the watchdog run at all.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
 - After editing a doc with Mermaid blocks, validate them before committing —
