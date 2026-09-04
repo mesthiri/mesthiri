@@ -59,8 +59,8 @@ Guardrails are structural: the App has no merge permission, the agent holds
 no credential and has no route to the forge — the service reads its diff and
 does the pushing — its output is schema-checked outside itself, a path
 denylist and intent tier decide what it may attempt at all, commits are
-signed off, and every run has a token/turn budget and a kill-the-tree
-timeout.
+signed off by the accountable human and disclose the machine that wrote
+them, and every run has a token/turn budget and a kill-the-tree timeout.
 
 ## Principles
 

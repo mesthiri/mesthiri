@@ -193,6 +193,50 @@ proposing a change to its own guardrails. Two mechanisms decide eligibility
 Neither mechanism is a substitute for review; both exist so that review is
 not the *only* thing standing between an issue and a change.
 
+## Attribution and sign-off
+
+Every commit mesthiri makes carries a DCO `Signed-off-by`, and it names
+**the operator** — the human who registered the App, configured the target
+and runs the instance — from an explicit `operator:` field in config, never
+inferred from the host's git config or from the App.
+
+The reasoning matters more than the mechanism, because the DCO's text does
+not anticipate this case. Its clauses assume a human chain: (a) I wrote it,
+(b) it derives from compatible prior work, (c) a *person* who certified one
+of those handed it to me unmodified. An agent is not a person, so (c) does
+not apply, and the only clause that fits is (a) — the operator treating the
+agent as a tool they used, exactly as they would a code generator or a
+compiler. That reading is available only to someone actually accountable
+for the output, which is why the sign-off cannot be delegated to
+`mesthiri[bot]`: a certification with no person behind it certifies
+nothing.
+
+What the operator is asserting is provenance and licensing — that this
+contribution is theirs to offer under the project's licence — not that they
+have read every line. Reading is what the review stage and the human merge
+gate are for, and the disclosure below exists so no reviewer is misled
+about which is which.
+
+Three trailers, and the shape is not arbitrary:
+
+```
+Signed-off-by: Operator Name <operator@example.org>
+Co-authored-by: mesthiri[bot] <…+mesthiri[bot]@users.noreply.github.com>
+Generated-by: mesthiri <version>; agent <backend> <version>; run <run-id>
+```
+
+The commit **author** is the operator too, because DCO checkers compare the
+sign-off against the author and reject a mismatch — a bot-authored commit
+signed by a human fails the very check it was meant to satisfy. Machine
+authorship is not thereby hidden: the co-author trailer states it, the
+`Generated-by` trailer names the backend and links the pipeline run that
+produced it, the PR body says so in prose, and GitHub shows
+`mesthiri[bot]` as the pusher regardless.
+
+Fail closed: with no `operator:` configured, mesthiri refuses to start when
+any target has the code stage enabled. Guessing an identity to sign with is
+the one failure mode here that would be worse than not running.
+
 ## Process supervision
 
 The agent and git are both subprocesses, supervised through
@@ -293,7 +337,8 @@ label.
 | Guardrail | Mechanism |
 |---|---|
 | Humans gate merges | the App has no merge permission; branch protection stays on |
-| Sign-off | every commit made with `git commit -s` (DCO) |
+| Sign-off | every commit signed off by the configured operator, who is accountable for it; never by the bot |
+| Disclosure | co-author and `Generated-by` trailers name the machine and link the run; the PR body says so in prose |
 | Untrusted input | issue/PR text is data; prompts label it as such; no shell ever sees it |
 | Agent containment | agent runs in a namespace sandbox: read-only root, scratch clone the only writable mount, secrets outside the namespace, egress denied by default |
 | Output validation | agent output schema-checked outside the agent; capped retries then hard fail |
@@ -326,14 +371,6 @@ label.
 - The agent-backend protocol boundary: pi's RPC schema as-is, or a thin
   mesthiri-defined envelope so backends are swappable without touching
   stage code.
-- **Who signs off.** Every commit carries a DCO `Signed-off-by`, and the
-  kaappi org enforces it. A sign-off is a person certifying the origin of a
-  contribution, which `mesthiri[bot]` cannot meaningfully do. Candidates:
-  sign off in the operator's name (they configured the instance and are
-  accountable for it), sign off as the bot and let the human reviewer's
-  merge be the certification, or require a human to add their own sign-off
-  before a mesthiri PR is mergeable. This needs settling before the first
-  PR to a repo that enforces DCO — which is M5's demo.
 - Forge abstraction: GitHub first; GitLab/Forgejo later via the same
   REST-client module or a forge protocol. (GitHub App identity is a GitHub
   concept; the credential-provider seam is where a second forge's auth

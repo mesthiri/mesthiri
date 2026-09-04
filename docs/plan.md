@@ -71,14 +71,16 @@ nothing outside this repo to wait on.
       already handled, workflow label transitions, retro facts. Migrations
       as numbered scripts run at startup.
 - [ ] `lib/mesthiri/config.sld` — one config file (targets and their rubric
-      paths, App id / key path, poll intervals per event class, budgets,
-      cadences, pinned pi version, per-target **path denylist**, command
-      permission thresholds, sandbox egress allowlist); several targets
+      paths, App id / key path, **`operator:` name and email** for DCO
+      sign-off, poll intervals per event class, budgets, cadences, pinned
+      pi version, per-target **path denylist**, command permission
+      thresholds, sandbox egress allowlist); several targets
       are polled each cycle and served round-robin from the start, so
       fairness never has to be retrofitted into a queue that assumed one; `kaappi-cli` for the entry-point
-      flags. Startup validation rejects a triage target with no rubric path,
-      and refuses to start if a denylist is missing where the code stage is
-      enabled.
+      flags. Startup validation rejects a triage target with no rubric
+      path, and refuses to start if a denylist or an `operator:` identity is
+      missing where the code stage is enabled — mesthiri never guesses an
+      identity to sign commits with.
 - [ ] `lib/mesthiri/log.sld` — thin wrapper over `kaappi-log`: every log
       line carries stage + target repo + run id.
 
@@ -216,8 +218,15 @@ explaining why; an illegal label transition is rejected rather than written.
       credential and no route to the forge, so this is the only way a
       change can reach GitHub at all — the eligibility check sits on the
       path rather than beside it.
-- [ ] PR mechanics: commits `-s` + `Co-authored-by`, PR body links the
-      issue and the pipeline run; one issue, one PR; **never merge**.
+- [ ] PR mechanics: author and `Signed-off-by` are both the configured
+      operator (DCO checkers compare the two and reject a mismatch), with
+      `Co-authored-by: mesthiri[bot]` and a `Generated-by` trailer naming
+      the agent backend, its version and the pipeline run id. PR body says
+      in prose that the change is machine-generated and links the issue and
+      the run. One issue, one PR; **never merge**.
+- [ ] Test that a produced commit passes a DCO check the way the org's
+      DCO2 app applies it, against a fixture commit — the failure mode is a
+      PR that cannot be merged, discovered on a target repo.
 - [ ] Failure honesty: a run that can't reach green tests files its state
       as a comment on the issue, not a broken PR.
 
@@ -328,12 +337,13 @@ comment; a third is tier 2 and waits for a human.
   intervals live in config, the store keeps `ETag`s so unchanged polls stay
   free, and `mesthiri status` reports remaining limit before a new target is
   added rather than after it starves an existing one.
-- **DCO sign-off has no settled author**: mesthiri's commits carry
-  `Signed-off-by`, and a sign-off is a person certifying a contribution's
-  origin — something `mesthiri[bot]` cannot do. design.md's open question
-  lists the candidates; it must be answered before M5 opens a PR against a
-  repo that enforces DCO, which the sandbox target will if it mirrors org
-  practice.
+- **The operator is signing for work they have not read**: settled in
+  design.md as the only DCO clause that fits — the agent is a tool, the
+  operator is accountable — but it is a real obligation and not a formality.
+  It is why disclosure trailers are mandatory rather than decorative, and
+  why the human merge gate is load-bearing rather than ceremonial. An
+  operator who stops reading the PRs has quietly turned a certification
+  into a rubber stamp, and no mechanism in mesthiri can detect that.
 - **Rubric drift**: mesthiri consumes target-repo rubrics; a rubric change
   upstream silently changes behavior — the triage verdict records the
   rubric file's commit hash.

@@ -130,6 +130,7 @@ sequenceDiagram
   Note over A,G: no credential, no route to the forge —<br/>the agent cannot deliver anything itself
   S->>S: read the finished diff, re-check denylist
   alt diff is clean and in scope
+    S->>S: sign off as the configured operator<br/>add co-author + Generated-by trailers
     S->>G: push branch, open PR, never merge
   else denied path or budget exhausted
     S->>G: comment on the issue with the actual state
