@@ -1,10 +1,11 @@
 # mesthiri — user guide
 
-> **Nothing here works yet.** This repository has no code. This guide
-> describes the experience mesthiri is being built to deliver, written
-> early and deliberately, because a command that reads badly on the page
-> will read worse in a terminal. Every transcript below is designed, not
-> captured. When something here turns out to be wrong once it is real,
+> **Nothing here works yet.** M1 has landed — the modules underneath — but
+> no command in this guide runs: there is no dispatch, no shim workflow and
+> no stage. This guide describes the experience mesthiri is being built to
+> deliver, written early and deliberately, because a command that reads
+> badly on the page will read worse in a terminal. Every transcript below is
+> designed, not captured. When something here turns out to be wrong once it is real,
 > the guide is what changes first.
 
 If a word here is unfamiliar or looks like it might mean two things,
