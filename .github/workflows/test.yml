@@ -44,10 +44,11 @@ jobs:
   # and every merge is back to needing --admin — the failure #5 was filed
   # about.
   #
-  # Only `suite` is in that rule. `suite-macos` is deliberately not required
-  # yet: a required context that has never reported blocks merges exactly
-  # like a failing one. Require it from branch protection once it has run
-  # green on main.
+  # Both contexts are required by branch protection, added in that order:
+  # `suite-macos` only once it had reported green on main (e394223), because
+  # a required context that has never reported blocks merges exactly like a
+  # failing one. Renaming either leg here silently un-requires it — the rule
+  # names contexts, so change both together.
   suite:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
