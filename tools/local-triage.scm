@@ -51,7 +51,11 @@
 (define title (issue-field number "title"))
 (define body  (issue-field number "body"))
 
-(define home (string-append clone "/.agent-home"))
+;; Beside the clone, never inside it: the clone is what the code stage
+;; commits with `git add -A`, and a run once left pi's home and a stderr
+;; log in a repository that way.
+(define scratch (string-append clone "-scratch"))
+(define home (string-append scratch "/home"))
 (define stub (env "MESTHIRI_STUB_PORT"))
 
 (define agent-home
@@ -87,9 +91,9 @@
                        900
                        (list (cons 'tokens (harness-budget hn 'tokens))
                              (cons 'turns  (harness-budget hn 'turns)))
-                       (string-append clone "/trace.jsonl")
+                       (string-append scratch "/trace.jsonl")
                        env*
-                       (string-append clone "/agent-stderr.log")
+                       (string-append scratch "/agent-stderr.log")
                        clone))
 
 (display "outcome  ") (display (run-record-outcome rec))
@@ -97,4 +101,4 @@
 (display "\ntokens   ") (display (run-record-tokens rec))
 (display "\nmodel    ") (display (or (run-record-model rec) "-"))
 (display "\n\n") (display (or (run-record-text rec) "(no text)")) (newline)
-(display "\ntrace: ") (display clone) (display "/trace.jsonl\n")
+(display "\ntrace: ") (display scratch) (display "/trace.jsonl\n")

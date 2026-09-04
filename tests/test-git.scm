@@ -64,6 +64,33 @@
 (check "an untracked file is a change" #t (git-has-changes? dir))
 
 (define _cleanup (proc-run (list "rm" "-rf" dir)))
+;; --- what the deny-paths check must be able to see -------------------------
+;;
+;; The code stage commits with `git add -A`, so anything untracked in the
+;; clone is committed too. `git diff --name-only` lists only modified tracked
+;; files, and the gap between the two is where an agent's stray output lands:
+;; unseen by the check, then swept into the pull request. That happened — a
+;; run left pi's home and a stderr log in a repository.
+(define gdir "/tmp/mesthiri-git-untracked")
+(define _9164 (proc-run (list "rm" "-rf" gdir)))
+(define _3883 (proc-run (list "mkdir" "-p" (string-append gdir "/sub"))))
+(define _9018 (proc-run (list "git" "-C" gdir "init" "-q")))
+(call-with-output-file (string-append gdir "/tracked.txt")
+  (lambda (p) (display "one" p)))
+(define _6562 (proc-run (list "git" "-C" gdir "add" "tracked.txt")))
+(define _commit
+  (proc-run (list "git" "-C" gdir "-c" "user.name=t" "-c" "user.email=t@e"
+                "commit" "-q" "-m" "base")))
+(call-with-output-file (string-append gdir "/tracked.txt")
+  (lambda (p) (display "two" p)))
+(call-with-output-file (string-append gdir "/sub/stray.log")
+  (lambda (p) (display "agent output" p)))
+
+(define seen (git-changed-files gdir))
+(check "a modified tracked file is seen" #t (and (member "tracked.txt" seen) #t))
+(check "and an untracked one is too, because add -A will commit it"
+       #t (and (member "sub/stray.log" seen) #t))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))

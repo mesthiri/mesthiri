@@ -218,16 +218,24 @@
            (enc (let ((x (assoc "content" r))) (and x (cdr x)))))
       (values enc sha))))
 
-(define (agent-runner config harness provider-name model workdir trace)
+(define (agent-runner config harness provider-name model workdir trace event)
   (lambda (prompt)
     (let* ((provider (config-provider config provider-name))
-           ;; HOME goes inside the run's scratch directory. That is where pi
-           ;; finds the provider catalogue mesthiri writes for it — and it is
-           ;; also what stops the agent seeing an operator's real pi
-           ;; configuration, since extensions, logins and sessions from an
-           ;; interactive install are simply not there.
-           (home (string-append workdir "/.agent-home"))
-           (stderr-path (string-append workdir "/agent-stderr.log"))
+           ;; HOME and the stderr log go BESIDE the workdir, never inside it.
+           ;; The workdir is the clone the code stage commits with `git add
+           ;; -A`, so anything written there ends up in the pull request —
+           ;; and untracked files are invisible to a diff-based deny-paths
+           ;; check, so nothing would have objected. A local run put pi's home
+           ;; and a stderr log into a repository before this was noticed.
+           ;;
+           ;; It is still a directory mesthiri controls, which is the other
+           ;; half of the point: the agent gets the provider catalogue written
+           ;; for it and none of an operator's real pi configuration —
+           ;; extensions, logins, sessions are simply not there.
+           (scratch (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                   "/mesthiri-agent-" (number->string (event-id event))))
+           (home (string-append scratch "/home"))
+           (stderr-path (string-append scratch "/agent-stderr.log"))
            (argv (agent-argv harness provider-name model))
            (wrapped (or (sandbox-wrap argv workdir
                                       (string-append workdir "/secrets"))
@@ -364,7 +372,7 @@
     (git-branch workdir (branch-name-for number))
     (let* ((title (let ((t (assoc "title" issue))) (and t (cdr t))))
            (body  (let ((b (assoc "body" issue))) (and b (cdr b))))
-           (run (agent-runner config hn pname model workdir trace))
+           (run (agent-runner config hn pname model workdir trace event))
            (result (guard (e (#t (list (cons "summary" "the agent run failed")
                                        (cons "tests_pass" #f))))
                      (run (code-prompt title body (config-test-command config)))))
@@ -443,7 +451,7 @@
              (model (harness-model hn))
              (workdir (or (env "RUNNER_TEMP") "/tmp"))
              (diff (forge-request-diff forge repo number))
-             (run (agent-runner config hn pname model workdir #f)))
+             (run (agent-runner config hn pname model workdir #f event)))
         (for-each
          (lambda (dim)
            (guard (e (#t (log-warn "review pass " dim " failed; continuing")))
@@ -565,7 +573,7 @@
       (let ((issue (forge-get forge (string-append "/repos/" repo "/issues/"
                                                    (number->string (event-number event))))))
         (triage-issue forge config repo issue rubric sha mode
-                      (agent-runner config hn pname model workdir trace))))))
+                      (agent-runner config hn pname model workdir trace event))))))
 
 (define (cmd-dispatch args)
   (let ((ev (load-event)))

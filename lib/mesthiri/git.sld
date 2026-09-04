@@ -59,8 +59,14 @@
 
     (define (git-push dir branch) (git dir "push" "origin" branch))
 
+    ;; Everything `git add -A` would commit, which is what the deny-paths
+    ;; check has to inspect — so untracked files too, not just modified
+    ;; tracked ones. `diff --name-only` lists only the latter, and the gap
+    ;; between the two is exactly where an agent's stray output lands: unseen
+    ;; by the check, then swept into the commit.
     (define (git-changed-files dir)
-      (lines (git dir "diff" "--name-only" "HEAD")))
+      (append (lines (git dir "diff" "--name-only" "HEAD"))
+              (lines (git dir "ls-files" "--others" "--exclude-standard"))))
 
     (define (git-has-changes? dir)
       (> (string-length (git dir "status" "--porcelain")) 0))
