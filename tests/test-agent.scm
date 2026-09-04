@@ -81,6 +81,18 @@
 (check "an absent key is not a zero cap"
        'settled (run-record-outcome (fold-frames frames '((turns . 99)))))
 
+;; "usage": {} — kaappi-json reads the empty object as the distinct
+;; json-empty-object value, not a list, so frame-usage must yield #f
+;; rather than die in assoc.
+(check "frame-usage reads totalTokens" 120
+  (frame-usage (list (cons "type" "message_update")
+                     (cons "usage" '(("totalTokens" . 120))))))
+(check "frame-usage on an empty usage object" #f
+  (frame-usage (list (cons "type" "message_update")
+                     (cons "usage" (json-read-string "{}")))))
+(check "frame-usage without usage" #f
+  (frame-usage '(("type" . "message_update"))))
+
 ;; Unknown frame types must be ignored, not error: a pi upgrade that adds a
 ;; frame would otherwise break every run.
 (check "an unknown frame type is ignored"

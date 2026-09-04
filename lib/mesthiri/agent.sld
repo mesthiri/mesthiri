@@ -85,11 +85,14 @@
       (let ((t (frame-type f))) (and (string? t) (string=? t "agent_settled"))))
 
     ;; message_update carries a complete cumulative usage object, so a budget
-    ;; check reads the latest rather than summing.
+    ;; check reads the latest rather than summing. An empty usage object
+    ;; ({} — kaappi-json reads it as json-empty-object, not a list) or a
+    ;; missing totalTokens yields #f, like any other unusable usage.
     (define (frame-usage f)
       (let ((u (assoc "usage" f)))
-        (and u (let ((tt (assoc "totalTokens" (cdr u))))
-                 (and tt (cdr tt))))))
+        (and u (pair? (cdr u))
+             (let ((tt (assoc "totalTokens" (cdr u))))
+               (and tt (cdr tt))))))
 
     (define-record-type <run-record>
       (make-run-record outcome turns tokens model frames text)
