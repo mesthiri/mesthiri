@@ -34,7 +34,8 @@
           validate-output output-error? output-error-message
           run-agent write-trace agent-final-text
           run-record-text agent-env write-agent-home!
-          frame-refusal frame-error stderr-tail)
+          frame-refusal frame-error stderr-tail
+          extract-json-object agent-json)
   (begin
 
     ;; --- spawn arguments ---------------------------------------------------
@@ -195,6 +196,58 @@
       (let ((m (assoc "message" f)))
         (and m (pair? (cdr m))
              (let ((mm (assoc "model" (cdr m)))) (and mm (cdr mm))))))
+
+    ;; --- finding the object in the answer ----------------------------------
+    ;;
+    ;; A schema in the prompt does not buy a bare JSON reply. Of the first four
+    ;; real verdicts mesthiri produced, two were bare objects, one opened with
+    ;; a paragraph of reasoning and then the object, and one wrapped it in a
+    ;; ```json fence. Parsing the reply as-is raised on half of them — after
+    ;; the tokens were spent, which is the expensive place to fail.
+    ;;
+    ;; So the object is extracted rather than assumed. Scanning forward and
+    ;; keeping the LAST balanced top-level object handles all three shapes and
+    ;; the case where the prose itself contains braces: a model that reasons
+    ;; and then answers puts its answer last. Quotes and backslash escapes are
+    ;; tracked, so a brace inside a string does not shift the depth — and
+    ;; rationales here quote code.
+    (define (extract-json-object text)
+      (let ((n (string-length text)))
+        (let scan ((i 0) (start #f) (depth 0) (in-str #f) (esc #f) (best #f))
+          (if (>= i n)
+              (and best (substring text (car best) (cdr best)))
+              (let ((c (string-ref text i)))
+                (cond
+                 (esc            (scan (+ i 1) start depth in-str #f best))
+                 ((and in-str (char=? c #\\))
+                  (scan (+ i 1) start depth in-str #t best))
+                 ((char=? c #\")
+                  (scan (+ i 1) start depth (not in-str) #f best))
+                 (in-str         (scan (+ i 1) start depth in-str #f best))
+                 ((char=? c #\{)
+                  (scan (+ i 1) (if (= depth 0) i start) (+ depth 1) #f #f best))
+                 ((and (char=? c #\}) (> depth 1))
+                  (scan (+ i 1) start (- depth 1) #f #f best))
+                 ((and (char=? c #\}) (= depth 1))
+                  (scan (+ i 1) #f 0 #f #f (cons start (+ i 1))))
+                 (else           (scan (+ i 1) start depth #f #f best))))))))
+
+    ;; The agent's answer, parsed. Raises an output-error naming what came
+    ;; back, rather than whatever the JSON reader says about position 1.
+    (define (agent-json rec)
+      (let* ((text (agent-final-text rec))
+             (obj  (extract-json-object text)))
+        (if (not obj)
+            (raise (make-output-error
+                    (string-append "no JSON object in the agent's reply: "
+                                   (if (> (string-length text) 300)
+                                       (string-append (substring text 0 300) "…")
+                                       text)))))
+        (guard (e (#t (raise (make-output-error
+                              (string-append "the agent's reply contained a "
+                                             "JSON object that does not parse: "
+                                             obj)))))
+          (json-read-string obj))))
 
     ;; --- output validation, OUTSIDE the agent ------------------------------
     ;;

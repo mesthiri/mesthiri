@@ -269,9 +269,12 @@
         (if (not (eq? (run-record-outcome rec) 'settled))
             (die "agent run did not settle: " (run-record-outcome rec)
                  (agent-failure-detail rec stderr-path)))
-        ;; The agent's reply is the last assistant message; parsed and then
-        ;; validated by triage against its schema.
-        (json-read-string (agent-final-text rec))))))
+        ;; The agent's reply is the last assistant message. The object is
+        ;; extracted rather than assumed: a schema in the prompt does not buy
+        ;; a bare JSON reply, and half of the first real verdicts arrived
+        ;; wrapped in prose or a ```json fence. Validated by the stage against
+        ;; its schema after this.
+        (agent-json rec)))))
 
 ;; Why a run ended, in the terms a maintainer can act on. An outcome alone
 ;; sends someone to the workflow log; `refused` carries pi's own sentence,

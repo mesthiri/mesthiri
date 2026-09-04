@@ -161,6 +161,46 @@
 ;; pi's retries are turns, and they are what a budget has to stop.
 (check "each retry counts as a turn" 4 (run-record-turns rrec))
 
+
+;; --- the object in the answer ---------------------------------------------
+;;
+;; These three fixtures are the first real verdicts mesthiri produced, saved
+;; verbatim: a bare object, a paragraph of reasoning then the object, and one
+;; inside a ```json fence. Parsing the reply as-is raised on two of them.
+(define (slurp path)
+  (call-with-input-file path
+    (lambda (p) (let loop ((acc ""))
+                  (let ((c (read-char p)))
+                    (if (eof-object? c) acc (loop (string-append acc (string c)))))))))
+
+(for-each
+ (lambda (f)
+   (let* ((text (slurp (string-append "tests/support/" (car f))))
+          (obj  (extract-json-object text)))
+     (check (string-append (cdr f) ": an object is found") #t (string? obj))
+     (check (string-append (cdr f) ": it parses")
+            #t (guard (e (#t #f)) (json-read-string obj) #t))
+     (check (string-append (cdr f) ": it is the verdict")
+            #t (let ((d (json-read-string obj)))
+                 (and (assoc "priority" d) (assoc "tier" d) #t)))))
+ '(("verdict-bare-json.txt"       . "bare")
+   ("verdict-prose-then-json.txt" . "prose first")
+   ("verdict-fenced-json.txt"     . "fenced")))
+
+;; Braces inside strings must not shift the depth — these rationales quote
+;; code, and one of them quotes Scheme.
+(check "a brace inside a string does not end the object"
+       "{\"a\": \"} not the end\", \"b\": 1}"
+       (extract-json-object "noise {\"a\": \"} not the end\", \"b\": 1} tail"))
+;; A model that reasons and then answers puts the answer last.
+(check "the last complete object wins"
+       "{\"second\": 2}"
+       (extract-json-object "{\"first\": 1} and then {\"second\": 2}"))
+(check "no object at all is #f, not a crash"
+       #f (extract-json-object "I could not determine a priority."))
+(check "an unterminated object is not returned as if complete"
+       #f (extract-json-object "here it is: {\"priority\": \"high\""))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))
