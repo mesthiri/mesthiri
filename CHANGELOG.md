@@ -9,6 +9,19 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-09-04
+
+### Fixed
+
+- **Released binaries are built for the architecture baseline.** With no
+  `-Dtarget`, Zig builds for the *host's* exact CPU features, and GitHub's
+  runners are heterogeneous — so every release so far was specialised to
+  whichever machine happened to build it and died with `SIGILL`, no message,
+  on a runner that lacked those instructions. It looked like a code
+  regression and was not: the same v0.1.4 binary dispatched cleanly at 08:03
+  and core-dumped at 08:38. The release smoke test could never catch it,
+  because it runs on the machine that did the build.
+
 ## [0.1.5] — 2026-09-04
 
 ### Fixed

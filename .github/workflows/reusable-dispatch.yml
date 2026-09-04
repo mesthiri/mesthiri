@@ -29,7 +29,7 @@ jobs:
 
       - name: Install the pinned mesthiri release
         env:
-          MESTHIRI_VERSION: v0.1.4
+          MESTHIRI_VERSION: v0.1.6
         run: |
           set -euo pipefail
           base="https://github.com/mesthiri/mesthiri/releases/download/${MESTHIRI_VERSION}"
@@ -60,6 +60,31 @@ jobs:
           mv libkaappi_net.so libkaappi_http.so ~/.kaappi/lib/
           chmod +x mesthiri
 
+      # The agent runs inside a bubblewrap namespace, and mesthiri refuses to
+      # run it otherwise — so this step is load-bearing, not a convenience.
+      #
+      # Two things are needed and only the first is obvious. bubblewrap is not
+      # on the runner image. And Ubuntu 24.04 ships
+      # kernel.apparmor_restrict_unprivileged_userns=1, under which bwrap is
+      # installed, executable, and fails at `setting up uid map: Permission
+      # denied` — so installing it alone buys nothing. The sysctl relaxes that
+      # for this VM, which is ephemeral and discarded with the job.
+      #
+      # Note the direction: this widens what the RUNNER may do so that
+      # mesthiri can narrow what the AGENT may do. The agent ends up with
+      # strictly less than it had before this step existed.
+      - name: Install the sandbox
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          # Prove it before the job depends on it. Failing here is a clear
+          # setup error; failing later is an agent run that dies mid-flight.
+          bwrap --unshare-all --share-net --die-with-parent --new-session \
+                --ro-bind / / --proc /proc --dev /dev -- /bin/true
+          echo "bubblewrap $(bwrap --version | awk '{print $2}') works"
+
       # mesthiri drives pi; it does not embed it. Without this the binary
       # downloads cleanly, authorizes the event, matches a stage, and then
       # fails at the one thing it exists to do.
@@ -76,15 +101,6 @@ jobs:
           set -euo pipefail
           npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
           pi --version
-
-      - name: Capture the event
-        continue-on-error: true
-        run: cp "${{ github.event_path }}" /tmp/event.json
-      - uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: event-${{ github.run_id }}
-          path: /tmp/event.json
 
       - name: Dispatch
         env:

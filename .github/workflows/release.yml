@@ -102,7 +102,17 @@ jobs:
         run: |
           set -euo pipefail
           cd ../kaappi
-          zig build -Doptimize=ReleaseSafe
+          # -Dcpu=baseline, not Zig's native default. With no -Dtarget,
+          # Zig builds for the host's exact CPU features, and GitHub's
+          # runners are heterogeneous — so a binary built on a machine
+          # with wider vector support dies with SIGILL, no message, on a
+          # runner that lacks them. That is what happened here: one
+          # released binary dispatched fine at 08:03 and core-dumped at
+          # 08:38, and the smoke test never caught it because it runs on
+          # the machine that did the build. Baseline keeps the target
+          # native — the .sbc build-id rule above still holds — and drops
+          # only the CPU specialisation.
+          zig build -Dcpu=baseline -Doptimize=ReleaseSafe
           cp zig-out/bin/kaappi "$RUNNER_TEMP/kaappi-plain"
           "$RUNNER_TEMP/kaappi-plain" --version
 
@@ -129,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           cd ../kaappi
-          zig build -Dbundle="$RUNNER_TEMP/mesthiri.sbc" -Doptimize=ReleaseSafe
+          zig build -Dbundle="$RUNNER_TEMP/mesthiri.sbc" -Dcpu=baseline -Doptimize=ReleaseSafe
           cp zig-out/bin/kaappi "$RUNNER_TEMP/${{ matrix.artifact }}"
 
       # Every artifact is smoke-tested on its own platform, which is only

@@ -14,4 +14,4 @@
   (import (scheme base))
   (export mesthiri-version)
   (begin
-    (define mesthiri-version "0.1.5")))
+    (define mesthiri-version "0.1.6")))
