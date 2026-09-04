@@ -52,9 +52,12 @@ Everything here runs locally against fixtures. Nothing touches CI yet.
 
 - [ ] `lib/mesthiri/config.sld` — reads `.mesthiri/config.scm` with
       `read`: rubric path, budgets, path denylist, command permissions,
-      pinned agent version, `operator:` identity. No target list — mesthiri
-      acts on the repository it is installed in. Validation refuses triage
-      with no rubric path, and a code stage with no denylist or operator.
+      pinned agent version, reader/writer App IDs as
+      `(apps (reader <id>) (writer <id>))`, exactly one `operator:`
+      identity. No target list — mesthiri acts on the repository it is
+      installed in. Validation refuses triage with no rubric path, a code
+      stage with no denylist or operator, and any run with no App IDs. The
+      guide's sample config is the scaffold contract `install` produces.
 - [ ] `lib/mesthiri/event.sld` — the normalized event, built from the CI
       environment and the forge payload the shim passes through. One shape
       for issue, comment, PR, review and schedule events.
@@ -103,8 +106,9 @@ The heart of the re-architecture. Until this works, nothing else can.
       nothing and said nothing" is the failure mode this architecture makes
       easiest to hit, and it is unhelpful without this.
 
-**Demo:** `/ping` from an authorized account on `mesthiri/sandbox` gets a
-reply comment; from an unauthorized account, a refusal. End to end, in CI,
+**Demo:** `/ping` (a demo-only probe, not a shipped command) from an
+authorized account on `mesthiri/sandbox` gets a reply comment; from an
+unauthorized account, a refusal. End to end, in CI,
 with no server.
 
 ## M3 — Agent execution and containment
@@ -155,7 +159,9 @@ cannot reach a host off the allowlist.
 
 - [ ] `lib/mesthiri/labels.sld` — the state machine: declared legal
       transitions, mutual exclusion, write-then-read-back, and the
-      clear-downstream-on-new-commit rule.
+      clear-downstream-on-new-commit rule. Label definitions ship in the
+      M9 install pull request; dispatch applies `ready-for-triage` on
+      issue open, and the M4 sweep backstops unlabeled or updated issues.
 - [ ] `lib/mesthiri/triage.sld` — verify the issue's claims against a
       checkout using the M3 agent, classify per the rubric read from the
       target repo at its configured path, propose exactly one `priority:`
@@ -192,8 +198,9 @@ pull request against 2000-plus commits of someone's main project. Run it on
 ## M5 — Prioritize
 
 - [ ] Rank triaged issues into the ready queue — the repository's own
-      rubric first, RICE-style scoring where it has none — on the scheduled
-      run, moving labels rather than rows.
+      rubric ranking first, oldest-triaged-first where it has none, age
+      breaking ties — on the scheduled (UTC) run, moving labels rather
+      than rows. The per-day cap counts runs started.
 - [ ] Ranking is explainable: the scheduled run leaves a comment on each
       issue it promotes saying what moved it, so a maintainer can disagree
       with the ranking rather than only with the outcome.
@@ -232,7 +239,9 @@ third at tier 2 waiting for a human.
 - [ ] Review fires only on pull requests **mesthiri opened**, plus explicit
       `/review`. `pull_request_target` fires for fork PRs, so reviewing
       everything lets anyone who can open one spend the repo's budget; the
-      per-day cap is approximate and not a defence.
+      per-day cap is approximate and not a defence. An explicit `/review`
+      on a foreign PR fetches the diff through the API into a read-only
+      clone the agent cannot push from.
 - [ ] The review harness must not match the code harness: the other
       provider where two are declared, otherwise a different model. A
       config where they match is rejected at load.
@@ -253,15 +262,18 @@ hands over with `needs-human`.
 ## M8 — Retro
 
 - [ ] Mine completed CI runs and their JSONL trace artifacts for timings,
-      iteration counts, spend and failure classes; file improvement
-      proposals as issues **on this repository** — flaky tests burning
+      iteration counts, spend and failure classes; the trace contains the
+      run record, retention follows CI artifact retention. File
+      improvement proposals as issues **on the repository mesthiri is
+      installed in** — flaky tests burning
       budget, work that keeps escalating to a human, rubric gaps. It writes
       where the work is, with the same repo-scoped token every other stage
       uses, and needs no cross-repo credential.
 - [ ] Improvements to mesthiri itself arrive the ordinary way: a human
       reads a retro issue and reports it upstream. mesthiri is never
-      installed on its own repository — the refusal lands with `install` in
-      M9; until then it is a rule in the README rather than a mechanism.
+      installed on its own repository — the `mesthiri/mesthiri` string-match
+      refusal lands with `install` in M9; until then it is a rule in the
+      README rather than a mechanism.
 
 **Demo:** after the M6 and M7 runs, a scheduled retro files an issue on
 `mesthiri/sandbox` naming something real — a test that failed twice, or a
@@ -271,13 +283,16 @@ stage that spent its budget without reaching green.
 
 - [ ] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
       a **starter rubric**, since most repos have none and "first write a
-      policy document" is a poor first five minutes) and the shim workflow
-      as a pull request, in ordered layers that install forward,
-      uninstall in reverse, and report status. The layering idea is
+      policy document" is a poor first five minutes), label definitions,
+      and the shim workflow as a pull request, in ordered layers that
+      install forward, uninstall in reverse, and report status. The
+      scaffolded config matches the guide's sample (App IDs, deny-paths,
+      `max-tier 0`, budgets, pinned versions). The layering idea is
       fullsend's ADR 0006.
 - [ ] Release automation: build the standalone binary for Linux x86_64 and
-      arm64, publish with SHA256SUMS, and pin it in the reusable workflow.
-      Layered distribution means a fix here reaches installed repos without
+      arm64 plus macOS arm64 for local `try` and `install`, publish with
+      SHA256SUMS, and pin it in the reusable workflow. Layered
+      distribution means a fix here reaches installed repos without
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.
 - [ ] `mesthiri apps create` — print pre-filled GitHub App manifest URLs
@@ -286,7 +301,10 @@ stage that spent its budget without reaching green.
       needs NaCl sealed-box encryption, and a crypto dependency is too much
       to carry for a once-per-repo step (design.md records this).
 - [ ] A preset for the kaappi org so its repos install with one command.
-- [ ] `mesthiri install` refuses mesthiri's own repository.
+      It ships a placeholder operator the org fills in; rotation afterwards
+      is a config edit.
+- [ ] `mesthiri install` refuses `mesthiri/mesthiri` by string match; forks
+      are unaffected.
 
 **Demo:** `mesthiri install` opens a pull request against a repo that has
 never seen mesthiri, and merging it is enough to make `/triage` work.

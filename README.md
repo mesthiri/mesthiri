@@ -46,12 +46,13 @@ than instructions.
 | **Code** | label or command | Drive a coding agent to a tested implementation, then push and open the PR from outside the sandbox |
 | **Review** | PR events | Multi-dimensional review: correctness, security, performance, intent alignment |
 | **Fix** | review findings | Apply findings, push, re-run tests until clean |
-| **Retro** | schedule | Analyze completed runs, file process-improvement proposals as issues on the same repo |
+| **Retro** | schedule | Analyze completed runs, file process-improvement proposals as issues on the installed repo |
 
 Five of the six can also be run on demand by slash command — `/triage`,
 `/implement`, `/review`, `/fix`, `/retro` — by someone whose own permission
-on the repo covers it, and only where their inputs exist: `/implement` on an
-issue, `/fix` on a pull request. Prioritize is scheduled only; it ranks a
+on the repo covers it, and only where their inputs exist: `/triage` and
+`/implement` on an issue, `/review` and `/fix` on a pull request, `/retro`
+on either. Prioritize is scheduled only; it ranks a
 backlog, which is not a thing you ask for one of.
 
 ## Architecture (one paragraph)
@@ -89,8 +90,9 @@ them, and every run has a token/turn budget and a kill-the-tree timeout.
 3. **Untrusted inputs.** Issue and PR text is data, never instructions to
    the orchestrator.
 4. **Budgets, honestly.** A run's token, turn and wall-clock caps are
-   exact, because the run enforces them on itself. Caps *across* runs are
-   derived from recent run history and are approximate — enough to stop a
+   exact, because the run enforces them on itself. Caps *across* runs count
+   runs started and are derived from recent run history, so they are
+   approximate — enough to stop a
    runaway, not to bill against. That is the price of keeping no
    database.
 5. **Bring your own agent.** The coding agent is a subprocess speaking a

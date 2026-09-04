@@ -125,7 +125,7 @@ flowchart LR
   fix -->|"depth exhausted"| gate
   gate --> merged(["merged"])
   merged --> retro["Retro<br/>mine run records"]
-  retro -->|"proposals as issues<br/>on this repo"| human2{{"HUMAN<br/>reads and acts"}}
+  retro -->|"proposals as issues<br/>on the installed repo"| human2{{"HUMAN<br/>reads and acts"}}
 
   style gate fill:#ffe9b3,stroke:#b8860b,stroke-width:2px
   style human2 fill:#ffe9b3,stroke:#b8860b,stroke-width:2px
@@ -175,12 +175,20 @@ Step 3 and the final step are the only moments a credential is used, and
 both happen outside the sandbox. The eligibility check sits *on* the path a
 change takes to GitHub rather than beside it — there is no second path.
 
+An explicit `/review` on a pull request mesthiri did not open follows the
+same boundary in read-only form: the diff is fetched through the API into a
+clone the agent cannot push from, so there is still no path from the agent
+to the forge.
+
 ## 5. Workflow labels
 
 Workflow state lives on the repository where a human can read it and change
 it. There is no database it could live in instead — these labels are the
 state. Transitions are guarded, states are mutually exclusive, and every
-write is read back to confirm it took.
+write is read back to confirm it took. Label definitions ship in the
+install pull request; dispatch applies `ready-for-triage` on issue open,
+and the scheduled sweep backstops unlabeled or updated issues it finds by
+query.
 
 ```mermaid
 stateDiagram-v2
@@ -315,3 +323,6 @@ path), and any inbound HTTP server.
 
 A target repository needs none of the Kaappi ecosystem installed. The
 workflow downloads one standalone binary and verifies its checksum.
+Releases ship Linux x86_64 and arm64 for CI plus macOS arm64 for local
+`try` and `install`; the App IDs come from `.mesthiri/config.scm`, only the
+private keys arrive as secrets.

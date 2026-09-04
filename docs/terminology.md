@@ -54,6 +54,8 @@ s-expressions and **interpreted over a fixed vocabulary, never `eval`ed**.
 
 **Command** — a slash command in a comment: `/triage`, `/implement`,
 `/review`, `/fix`, `/retro`. Parsed by a plain grammar, never by a model.
+`/triage` and `/implement` are issue commands; `/review` and `/fix` are
+pull-request commands; `/retro` runs on either. Prioritize has no command.
 
 ## The agent
 
@@ -111,7 +113,8 @@ output.
 `ready-for-triage`, `triaged`, `ready-to-implement`, `in-progress`,
 `ready-for-review`, `needs-fix`, `ready-for-merge`, `needs-human`. Guarded
 transitions, mutually exclusive, and a new commit clears every downstream
-label.
+label. Definitions ship in the install pull request; dispatch applies
+`ready-for-triage` on issue open and the sweep backstops the rest.
 
 **Adoption ladder** — the documented progression from `mesthiri try`
 through dry-run, live, tier 0, tier 1, to review and fix. No rung merges.
@@ -119,7 +122,8 @@ through dry-run, live, tier 0, tier 1, to review and fix. No rung merges.
 ## People
 
 **Operator** — the human who registered the Apps and installed mesthiri on
-the repository. Their name is in `config.scm`, they sign off every commit
+the repository. Exactly one per repository; rotation is a config edit.
+Their name is in `config.scm`, they sign off every commit
 mesthiri makes, and they are the person accountable for its output.
 
 **Commenter** — whoever issued a slash command. Authorization is checked
@@ -148,10 +152,11 @@ environment (`ANTHROPIC_API_KEY`).
 ## Records
 
 **Run record** — what a run leaves behind: stage, outcome, timings, spend,
-model, and the rubric SHA where relevant.
+model, and the rubric SHA where relevant. It is contained in the JSONL
+trace, not a separate artifact.
 
 **JSONL trace** — the per-run artifact uploaded to CI, which retro mines
-instead of a database.
+instead of a database. Retention follows CI artifact retention.
 
 **`Generated-by` trailer** — the commit trailer naming mesthiri's version,
 the backend, the provider and model, and the run URL.

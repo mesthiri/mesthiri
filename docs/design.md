@@ -27,7 +27,9 @@ humans set intent, define guardrails, and review outcomes. It is:
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
   (`kaappi-http`, `kaappi-json`, `kaappi-cli`, `kaappi-log`), and compiled
   with `zig build -Dbundle-src=` so a target repository needs a binary, not
-  a Kaappi installation;
+  a Kaappi installation. Releases ship Linux x86_64 and arm64 for CI plus
+  macOS arm64 for local `try` and `install`, which run uncontained and say
+  so at startup;
 - **agent-agnostic**: the coding agent is a subprocess speaking JSON over
   stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`); the
   interface is small enough that other headless agents can slot in.
@@ -90,13 +92,18 @@ matching stage in that job. One event, one stage, one job.
    hypothesis, not a fact — classify per the target's own rubric, and
    propose exactly one priority label with a one-paragraph rationale. Never
    edits code.
-2. **Prioritize** (scheduled): rank triaged issues into a ready queue.
+2. **Prioritize** (scheduled): rank triaged issues into a ready queue. The
+   repository's rubric ranking wins where it has one; otherwise issues
+   promote oldest-triaged-first, with age breaking ties.
 3. **Code** (label or command): implement, run the *project's own* test
    command, open a PR. One issue, one PR.
-4. **Review** (PR events, **on pull requests mesthiri opened**):
-   correctness, security, performance and intent alignment as independent
-   passes; findings verified adversarially before posting, because a finding
-   that cannot survive a refutation attempt is noise.
+4. **Review** (PR events, **on pull requests mesthiri opened**, plus explicit
+   `/review`): correctness, security, performance and intent alignment as
+   independent passes; findings verified adversarially before posting,
+   because a finding that cannot survive a refutation attempt is noise. An
+   explicit `/review` on a pull request mesthiri did not open fetches the
+   diff through the API into a read-only clone the agent cannot push from —
+   the same sandbox minus any write path.
 
    The restriction is a spend gate, not modesty. `pull_request_target` fires
    for fork pull requests, so reviewing every incoming PR would let anyone
@@ -107,10 +114,11 @@ matching stage in that job. One event, one stage, one job.
 5. **Fix** (review findings): apply, push, re-run tests, to a bounded depth,
    then hand to a human.
 6. **Retro** (scheduled): mine completed runs for timings, iteration counts
-   and failure classes, and file improvement proposals as issues **on this
-   repository** — flaky tests burning agent budget, issues that keep
-   escalating to a human, gaps in the rubric. It writes where the work is,
-   using the same repo-scoped token as every other stage.
+   and failure classes, and file improvement proposals as issues **on the
+   repository mesthiri is installed in** — flaky tests burning agent budget,
+   issues that keep escalating to a human, gaps in the rubric. It writes
+   where the work is, using the same repo-scoped token as every other stage,
+   so its proposals can re-enter the pipeline like any other issue.
 
 ## State without a database
 
@@ -120,10 +128,12 @@ is state a human can read, audit and correct without shell access.
 
 - **Workflow state lives in labels**: `ready-for-triage`, `triaged`,
   `ready-to-implement`, `in-progress`, `ready-for-review`, `needs-fix`,
-  `ready-for-merge`, `needs-human`. Transitions are guarded, states are
-  mutually exclusive, and a write is read back to confirm it took. **A new
-  commit clears every downstream label**, so an approval cannot outlive the
-  head that earned it.
+   `ready-for-merge`, `needs-human`. Transitions are guarded, states are
+   mutually exclusive, and a write is read back to confirm it took. **A new
+   commit clears every downstream label**, so an approval cannot outlive the
+   head that earned it. Label definitions ship in the install pull request;
+   dispatch applies `ready-for-triage` on issue open, and the scheduled sweep
+   backstops it by picking up unlabeled or updated issues it finds by query.
 - **Idempotency** comes from the forge, not from a lock table: a job checks
   whether it has already acted on this comment, commit or event id before
   acting, and CI concurrency groups collapse rapid-fire edits into one run.
@@ -136,13 +146,16 @@ is state a human can read, audit and correct without shell access.
   no odd-looking orphan branch to someone else's project.
 - **Run history** is CI run history. Retro reads completed workflow runs and
   the JSONL trace each stage uploads as an artifact, rather than a table it
-  maintained itself.
+  maintained itself. The trace *contains* the run record — stage, outcome,
+  timings, spend, model, rubric SHA where relevant — plus the per-turn
+  detail retro needs; retention follows CI artifact retention.
 
 The honest cost is spend accounting. A per-run budget is exact, because the
 run enforces it on itself. A cap *across* runs has nowhere to keep a
 counter, so it is derived instead: before starting an expensive stage, a job
 queries recent workflow runs and their traces and declines if the day's
-spend already looks exhausted. Approximate, lagging, and defeatable by
+spend already looks exhausted. The per-day cap counts **runs started**;
+schedules are **UTC cron**. Approximate, lagging, and defeatable by
 concurrent jobs starting at once — good enough to stop a runaway, not to
 bill against. The alternative was a database, and the database was the thing
 being deleted.
@@ -156,9 +169,12 @@ choice in a Scheme project, at the cost of being less familiar to a
 maintainer who expected YAML.
 
 - `.mesthiri/config.scm` — rubric path, budgets, denylist, command
-  permissions, pinned agent version, operator identity. There is no list of
-  targets: mesthiri is installed on a repository and acts on that
-  repository.
+  permissions, pinned agent version, the reader and writer App IDs, operator
+  identity. There is no list of targets: mesthiri is installed on a
+  repository and acts on that repository. The App IDs are public
+  configuration; only the private keys are secrets. The guide's sample —
+  deny-paths, `max-tier 0`, budgets, pinned pi and model versions — is the
+  scaffold contract `install` produces, not an illustration.
 - `.mesthiri/harness/<role>.scm` — one file per agent role: system prompt,
   allowed tools, which provider and model, effort, budgets, sandbox policy.
   A role is configured in one reviewable file rather than scattered across
@@ -257,7 +273,9 @@ organizations; a single operator does not.
 ### Where the keys actually live
 
 Three secrets, all GitHub Actions repository secrets: the two App private
-keys and the model backend's API key. Three consequences follow, and each is
+keys and the model backend's API key. The two App IDs are not secrets —
+they live in `.mesthiri/config.scm` as `(apps (reader <id>) (writer <id>))`.
+Three consequences follow, and each is
 easy to get wrong by improvising.
 
 **The PEM has to touch disk.** `openssl dgst -sha256 -sign` takes the key as
@@ -356,16 +374,17 @@ should be attempted. Two checks run before an agent is spawned:
 
 ## Commands
 
-`/triage`, `/implement`, `/review`, `/fix`, `/retro` in an issue or PR
-comment. Parsed by a plain grammar, never by a model. Authorized against
+`/triage` and `/implement` are issue commands; `/review` and `/fix` are
+pull-request commands; `/retro` runs on either. Parsed by a plain grammar,
+never by a model. Authorized against
 **the commenter's** permission on the repository, by one rule: a command
 that can **change code** needs write or better (`/implement`, `/fix`); a
 command that only produces **commentary** — comments, labels, issues —
 needs triage or better (`/triage`, `/review`, `/retro`). Spend is not the
-test, since every one of them costs tokens. Commands are also restricted to
-the entity where their inputs exist, so `/implement` is an issue command and `/fix` is a PR
-command (fullsend's ADR 0076 reaches the same split). An unauthorized
-command gets a refusal comment, not silence.
+test, since every one of them costs tokens. An unauthorized
+command gets a refusal comment, not silence. Prioritize has no command: it
+ranks a backlog, which is not a thing you ask for one of
+(fullsend's ADR 0076 reaches the same split for implement/fix).
 
 ## Rubrics
 
@@ -390,7 +409,9 @@ change instead of a mystery.
 
 Every commit carries a DCO `Signed-off-by` naming **the operator** — the
 human who registered the Apps and installed mesthiri on the repository —
-from an explicit `operator:` field, never inferred.
+from an explicit `operator:` field, never inferred. Exactly one operator per
+repository; rotation is a config edit. The kaappi-org preset ships a
+placeholder the org fills in.
 
 The DCO's text does not anticipate this case. Its clauses assume a human
 chain: I wrote it, it derives from compatible prior work, or a *person* who
@@ -445,10 +466,12 @@ stage refuses to run.
 - Replacing the target project's CI, review culture or triage rubric —
   mesthiri consumes those; it does not define them.
 - **Working on itself.** mesthiri is never installed on its own repository.
-  An orchestrator that can modify the code deciding what it is allowed to do
-  has no guardrail it cannot reach, and a flat rule is easier to keep than a
-  denylist is to get exhaustively right. Improvements to mesthiri arrive the
-  ordinary way: a human reads a retro issue and reports it here.
+  `install` refuses `mesthiri/mesthiri` by string match; forks are
+  unaffected. An orchestrator that can modify the code deciding what it is
+  allowed to do has no guardrail it cannot reach, and a flat rule is easier
+  to keep than a denylist is to get exhaustively right. Improvements to
+  mesthiri arrive the ordinary way: a human reads a retro issue and reports
+  it here.
 - Matching fullsend's scope. It is years and an organization ahead on
   multi-forge support, org-scale installation and shared infrastructure.
   mesthiri's claim is narrower: one repository, one operator, one binary,

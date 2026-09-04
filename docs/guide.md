@@ -30,7 +30,10 @@ changing it at all:
 mesthiri try owner/repo --rubric docs/dev/github-issues.md
 ```
 
-That reads your open issues with a personal access token, applies your
+Releases ship a macOS arm64 binary for this local step alongside the Linux
+builds for CI. It runs uncontained on your laptop and says so at startup —
+which is why it calls a model directly (below) rather than spawning an
+agent. That reads your open issues with a personal access token, applies your
 rubric to each one, and prints the result. It writes nothing — no labels,
 no comments, no branches — and it does not clone your repository.
 
@@ -121,6 +124,9 @@ Then delete the .pem files. They are not needed again, and GitHub will
 not show them to you a second time either.
 ```
 
+The two App IDs are not secrets — they go in `.mesthiri/config.scm` as
+`(apps (reader <id>) (writer <id>))`, which `install` scaffolds for you.
+
 Two things worth knowing about that.
 
 **Anyone with write access to this repository can obtain these secrets.**
@@ -149,7 +155,8 @@ mesthiri install owner/repo
 This opens a pull request against your repository adding three files: a shim
 workflow under `.github/workflows/`, a starter `.mesthiri/config.scm`, and a
 starter rubric. Read it like any other pull request. Merging it is what
-turns mesthiri on.
+turns mesthiri on — and creates the 8 workflow labels dispatch and the
+sweeps coordinate through. (`install` refuses `mesthiri/mesthiri` itself.)
 
 ```
 mesthiri install — opening a pull request, changing nothing directly
@@ -204,9 +211,14 @@ code and a fork carries a copy. It is s-expressions, read as data.
 (mesthiri
   (version 1)
 
-  ;; Who certifies mesthiri's commits. A DCO sign-off is a person
+  ;; Who certifies mesthiri's commits. Exactly one operator per repository;
+  ;; rotation is a config edit. A DCO sign-off is a person
   ;; asserting where a contribution came from, so it names you, not a bot.
   (operator "Your Name" "you@example.org")
+
+  ;; The two GitHub App IDs. Public configuration — only the private keys
+  ;; are secrets.
+  (apps (reader 123456) (writer 123457))
 
   ;; Which agent program mesthiri drives. Not the model — see below.
   (agent (backend pi) (version "0.9.2"))
@@ -230,7 +242,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
 
   (budgets
     (per-run (tokens 200000) (turns 40) (wall-clock "20m"))
-    (per-day (runs 12)))          ; approximate — see "About budgets"
+    (per-day (runs 12)))          ; approximate runs-started cap + UTC cron — see "About budgets"
 
   ;; Minimum repository permission to issue each command.
   (commands (triage    (min-permission triage))
@@ -253,8 +265,10 @@ code and a fork carries a copy. It is s-expressions, read as data.
 ```
 
 The expressions after `on` are predicates over the event, drawn from a
-fixed vocabulary. They are interpreted, not evaluated — a config file
-cannot become a program.
+fixed vocabulary, with schedules as UTC cron. They are interpreted, not
+evaluated — a config file cannot become a program. This sample is the
+scaffold contract: `install` produces it, down to the deny-paths, `max-tier
+0`, budgets and pinned versions.
 
 ## Choosing models
 
@@ -374,7 +388,9 @@ subscribes to `pull_request_target`, which fires for fork pull requests too
 — so reviewing everything would let anyone who can open a pull request start
 an agent run on your budget. Fifty pull requests, fifty runs. Until there is
 a spend gate worth trusting, review stays on the loop mesthiri owns; you can
-always ask for one with `/review`, which is permission-checked.
+always ask for one with `/review`, which is permission-checked. An explicit
+`/review` on a foreign pull request fetches the diff through the API into a
+read-only clone the agent cannot push from.
 
 ## What a mesthiri pull request looks like
 
@@ -434,7 +450,8 @@ time and stops itself.
 
 The per-day cap is not exact. mesthiri keeps no database, so before an
 expensive stage a job looks at recent run history and declines if the day
-already looks spent. That lags, and two jobs starting at the same moment
+already looks spent. The cap counts runs started, and schedules are UTC
+cron. That lags, and two jobs starting at the same moment
 can both decide there is room. It is a runaway stop, not an accounting
 system. If you need a hard ceiling, set one on your CI spending, where it
 can actually be enforced.
@@ -442,7 +459,9 @@ can actually be enforced.
 ## When something goes wrong
 
 Everything mesthiri does is a CI run, so the run log is the first place to
-look, and each run uploads a JSONL trace as an artifact.
+look, and each run uploads a JSONL trace as an artifact. The trace contains
+the run record — stage, outcome, timings, spend, model, rubric SHA where
+relevant — and retention follows CI artifact retention.
 
 **A stage did nothing and said nothing.** The trigger did not match. Run
 `mesthiri explain-event` against the run to see the normalized event and
@@ -489,4 +508,5 @@ somewhere else, because there is no somewhere else.
 - **Reach GitHub from inside the agent.** The agent runs sandboxed with no
   credential and no route to the forge. It writes files; the job decides
   what happens to them.
-- **Work on itself.** mesthiri is never installed on its own repository.
+- **Work on itself.** mesthiri is never installed on its own repository
+  (`install` refuses `mesthiri/mesthiri`; forks are unaffected).
