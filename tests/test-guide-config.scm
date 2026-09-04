@@ -32,10 +32,10 @@
               (in (loop (read-line p) #t (string-append acc line "\n")))
               (else (loop (read-line p) #f acc)))))))
 
-(define text (sample-config "docs/guide.md"))
+(define text (sample-config "docs/guide/configuring.md"))
 (check "the guide still contains a sample config" #t (string? text))
 
-(define cfg (parse-config (read (open-input-string text)) "docs/guide.md"))
+(define cfg (parse-config (read (open-input-string text)) "docs/guide/configuring.md"))
 (check "it parses" 1 (config-version cfg))
 (check "it names an operator" #t (string? (config-operator-name cfg)))
 (check "it declares both Apps"

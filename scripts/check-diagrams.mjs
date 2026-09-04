@@ -7,7 +7,7 @@
 // the check CLAUDE.md asks for before committing docs/architecture.md.
 //
 //   npm i --no-save mermaid jsdom
-//   node scripts/check-diagrams.mjs            # defaults to docs/*.md
+//   node scripts/check-diagrams.mjs            # defaults to every .md under docs/
 //   node scripts/check-diagrams.mjs docs/architecture.md
 //
 // Exits non-zero if any block fails.
@@ -17,7 +17,16 @@ import path from 'node:path'
 
 const files = process.argv.slice(2).length
   ? process.argv.slice(2)
-  : fs.readdirSync('docs').filter(f => f.endsWith('.md')).map(f => path.join('docs', f))
+  : walk('docs')
+
+// Recursive, so docs/guide/*.md is covered. A symlinked directory
+// (docs/assets) is not a directory to Dirent, so it is skipped.
+function walk(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const p = path.join(dir, e.name)
+    return e.isDirectory() ? walk(p) : e.name.endsWith('.md') ? [p] : []
+  })
+}
 
 let JSDOM
 try {
