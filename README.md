@@ -1,5 +1,10 @@
 # mesthiri
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/mascot-dark.png">
+  <img align="right" width="230" alt="A Great Hornbill perched on a steel beam, sighting a plumb line" src="assets/mascot.png">
+</picture>
+
 **Autonomous development-lifecycle agents for Git-hosted projects, written in
 [Kaappi Scheme](https://kaappi-lang.org/).**
 
@@ -7,7 +12,9 @@
 directs a crew of workers on a building site. That is what this project is:
 an orchestrator that directs headless coding agents through the software
 development lifecycle, while humans set direction, define guardrails, and
-review outcomes.
+review outcomes. The mascot is a Great Hornbill — Kerala's state bird, which
+grows its own hard hat and is here checking the wall against a plumb line rather
+than building it. See [assets/README.md](assets/README.md) for the marks.
 
 ## Status: pre-alpha (M1 landed, nothing is installable yet)
 

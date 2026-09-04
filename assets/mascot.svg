@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 -2 380 334" width="380" height="334" role="img" aria-label="mesthiri: a Great Hornbill perched on a steel beam, sighting a plumb line"><!-- mesthiri: the Great Hornbill foreman. Palette and usage in assets/README.md. -->
+<rect x="18" y="298" width="290" height="22" rx="4" fill="#34281D"/>
+  <rect x="18" y="298" width="290" height="7" rx="3.5" fill="#DDD5CB" opacity="0.3"/>
+  <circle cx="44" cy="310" r="4" fill="#1A1410" opacity="0.6"/>
+  <circle cx="282" cy="310" r="4" fill="#1A1410" opacity="0.6"/>
+  <!-- tail: white blade with the hornbill's black band -->
+  <clipPath id="tl"><path d="M 112,246 C 86,262 56,282 30,294 C 42,306 62,308 79,301 C 103,290 124,274 134,258 Z"/></clipPath>
+  <path d="M 112,246 C 86,262 56,282 30,294 C 42,306 62,308 79,301 C 103,290 124,274 134,258 Z" fill="#F3E9DB"/>
+  <g clip-path="url(#tl)"><path d="M 48,264 L 72,250 L 100,302 L 76,317 Z" fill="#1A1410"/></g>
+  <!-- legs -->
+  <path d="M 132,256 L 132,294 M 166,256 L 166,294" stroke="#9A6520" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path d="M 132,292 L 115,303 M 132,292 L 132,305 M 132,292 L 149,303" stroke="#9A6520" stroke-width="7.5" stroke-linecap="round" fill="none"/><path d="M 166,292 L 149,303 M 166,292 L 166,305 M 166,292 L 183,303" stroke="#9A6520" stroke-width="7.5" stroke-linecap="round" fill="none"/>
+  <!-- body -->
+  <ellipse cx="150" cy="218" rx="64" ry="56" fill="#1A1410"/>
+  <!-- folded wing -->
+  <path d="M 200,190 C 210,220 194,252 162,264 C 132,275 110,264 102,244 C 128,236 154,222 173,206 C 184,197 193,190 200,190 Z" fill="#34281D"/>
+  <!-- neck -->
+  <path d="M 158,214 C 150,188 158,162 178,150" stroke="#F3E9DB" stroke-width="41" stroke-linecap="round" fill="none"/>
+  <g transform="translate(196,128) scale(0.82)">
+  <ellipse cx="0" cy="0" rx="52" ry="52" fill="#1A1410"/>
+  <path d="M 16,-40 C 70,-44 132,-18 174,14 C 128,48 68,50 24,38 C 12,20 12,-20 16,-40 Z" fill="#1A1410"/>
+  <path d="M 26,2 C 72,10 128,16 168,18 C 126,42 72,44 30,34 C 22,22 22,10 26,2 Z" fill="#D08B3C"/>
+  <path d="M -22,-32 C -26,-56 -6,-78 26,-82 C 52,-86 78,-90 92,-92
+           C 108,-94 114,-84 112,-70 L 110,-50
+           C 132,-34 154,-10 170,14
+           C 128,14 70,4 26,-6 C 16,-16 12,-28 4,-32 C -6,-36 -16,-32 -22,-32 Z" fill="#E8B563"/>
+  <path d="M -18,-34 C 16,-46 68,-54 108,-50" fill="none" stroke="#1A1410" stroke-width="5.5" stroke-linecap="round"/>
+  <ellipse cx="8" cy="-10" rx="17" ry="16" fill="#F3E9DB"/>
+  <circle cx="13" cy="-9" r="8" fill="#1A1410"/>
+  <circle cx="16" cy="-12" r="2.6" fill="#F3E9DB"/></g>
+  <path d="M 362,0 L 362,142" stroke="#1A1410" stroke-width="3.5"/>
+  <rect x="346" y="140" width="32" height="9" rx="4" fill="#9A6520"/>
+  <path d="M 348,149 L 376,149 C 378,167 372,185 362,211 C 352,185 346,167 348,149 Z" fill="#B07530"/>
+  <path d="M 362,149 C 364,169 364,191 362,211 C 372,185 378,167 376,149 Z" fill="#9A6520"/>
+</svg>
