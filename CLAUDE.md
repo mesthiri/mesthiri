@@ -103,6 +103,18 @@ symlink and would overwrite everything here.
   what lets the watchdog run at all.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
+- **A kaappi defect goes upstream, not just into a workaround.** File it at
+  [kaappi/kaappi](https://github.com/kaappi/kaappi/issues) — the workspace
+  CLAUDE.md has the rule and what a good report needs. This file carried
+  "a raised error inside a test is NOT a failing exit code" as a fact of
+  life, and `tests/run-all.sh` greps stderr for `error[KP` because of it,
+  for months before the underlying behaviour was reported (kaappi#2510).
+  The workaround was right and filing it was still owed: every other repo
+  in the workspace was rediscovering the same thing. It cost a real defect
+  here — a weak model submitted a library that fails `KP2001` on import,
+  the test file's duplicate import made it load on the retry, the suite
+  printed "4 passed, 0 failed", and the code stage honestly reported green.
+
 - After editing a doc with Mermaid blocks, validate them before committing —
   a broken diagram fails silently on GitHub and reads as a missing section:
 
