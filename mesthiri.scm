@@ -330,7 +330,12 @@
      ((not (tier-allowed? tier (stage-max-tier st) by-command?))
       (post-comment forge event
                     (eligibility-refusal 'tier (number->string (or tier 0))))
-      (log-info "refused: tier " tier " needs a human"))
+      (log-info (if tier
+                    (string-append "refused: tier " (number->string tier)
+                                   " needs a human")
+                    (string-append "refused: issue " (number->string number)
+                                   " has no mesthiri verdict, so its tier is"
+                                   " unknown — run /triage on it first"))))
      (else (run-code-stage forge config event repo number issue mode)))))
 
 ;; The tier lives in the verdict, not a label — so it is read back from

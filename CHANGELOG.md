@@ -9,6 +9,20 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.10] — 2026-09-04
+
+### Fixed
+
+- **The agent's scratch is writable inside the sandbox.** v0.1.9 moved HOME
+  out of the clone and under the read-only root, so pi refused at startup
+  with `EROFS: read-only file system, open '…/.pi/agent/auth.json'`. There
+  are two writable mounts now, for two reasons: the clone because the
+  agent's output is the point, and the scratch because pi keeps state and it
+  must not be the clone.
+- **An untriaged issue says so.** The code stage logged `refused: tier #f
+  needs a human`, where `#f` is not a tier — it means no mesthiri verdict
+  exists on the issue yet. It now says that, and what to do about it.
+
 ## [0.1.9] — 2026-09-04
 
 ### Fixed
