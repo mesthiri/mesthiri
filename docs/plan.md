@@ -411,6 +411,22 @@ stage that spent its budget without reaching green.
       architecture.md and the guide each described a network control that
       did not exist, and now say so instead.
 
+- [ ] **More than one model key.** The shim has a single `model-key` input
+      and the reusable workflow exports it as one variable, so a repository
+      can fund exactly one provider. That interacts badly with the rule that
+      review must not run the implementer's provider *and* model: on an
+      account funding a single model, the guardrail cannot be satisfied at
+      all, and review simply cannot run. Found on the sandbox, where only
+      `glm-5.3` is funded — every other z.ai model answers 1113
+      "insufficient balance", and `code` had already claimed it.
+
+      Two ways out, and they are different decisions. Per-provider secrets
+      (`(secret GLM_API_KEY)` naming a repository secret the shim forwards
+      under that name) restores what the config already looks like it
+      promises. Or the guardrail weakens to "should differ", which is worse:
+      the whole point of adversarial verification is that the reviewer does
+      not share the implementer's blind spots.
+
 ## M9 — Installation and distribution
 
 - [x] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
