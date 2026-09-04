@@ -22,7 +22,7 @@
           config-agent-version config-provider-names config-provider
           provider-endpoint provider-secret provider-key-env provider-api
           config-command-permission config-stage stage-mode stage-trigger
-          config-priority-order
+          config-priority-order config-test-command
           stage-max-tier config-budget
           config-error? config-error-message)
   (begin
@@ -134,6 +134,10 @@
     ;; that has not stated one.
     (define (config-priority-order c)
       (form-args (config-forms c) 'priorities))
+
+    ;; The target project's own test command. mesthiri runs the project's
+    ;; tests rather than inventing a definition of green.
+    (define (config-test-command c) (form-arg1 (config-forms c) 'test-command))
 
     (define (config-stage c name)
       (let ((ss (form-args (config-forms c) 'stages)))

@@ -4,14 +4,15 @@
 ;;; transport, so the rest of the codebase loads and tests without the C-FFI
 ;;; shared object built and installed.
 
-(import (scheme base) (scheme write) (scheme read) (scheme time)
+(import (scheme base) (scheme write) (scheme read) (scheme time) (scheme char)
         (scheme process-context) (scheme file)
         (kaappi http) (kaappi json)
         (mesthiri config) (mesthiri jwt) (mesthiri forge) (mesthiri event)
         (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
         (mesthiri version) (mesthiri agent) (mesthiri sandbox)
         (mesthiri harness) (mesthiri triage) (mesthiri labels)
-        (mesthiri sweep) (mesthiri prioritize))
+        (mesthiri sweep) (mesthiri prioritize) (mesthiri code)
+        (mesthiri eligibility) (mesthiri git))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -243,6 +244,126 @@
          (promoted (prioritize! forge config repo mode)))
     (log-info "prioritize " mode ": " (length promoted) " issue(s) promoted")))
 
+;; The code stage. The gates run in cost order and the agent is the last
+;; thing reached: an ineligible issue costs no clone and no tokens.
+(define (code-handler forge config event)
+  (let* ((repo (event-repo event))
+         (st (config-stage config 'code))
+         (mode (stage-mode st))
+         (number (event-number event))
+         (by-command? (and (decision-command-name) #t))
+         (issue (forge-get forge (string-append "/repos/" repo "/issues/"
+                                                (number->string number))))
+         (tier (issue-tier forge repo number)))
+    (cond
+     ((eq? mode 'off) (log-info "code stage is off"))
+     ((not (tier-allowed? tier (stage-max-tier st) by-command?))
+      (post-comment forge event
+                    (eligibility-refusal 'tier (number->string (or tier 0))))
+      (log-info "refused: tier " tier " needs a human"))
+     (else (run-code-stage forge config event repo number issue mode)))))
+
+;; The tier lives in the verdict, not a label — so it is read back from
+;; mesthiri's own triage comment rather than from the issue's labels.
+(define (issue-tier forge repo number)
+  (guard (e (#t #f))
+    (let loop ((cs (forge-get-all forge
+                     (string-append "/repos/" repo "/issues/"
+                                    (number->string number) "/comments"))))
+      (cond ((null? cs) #f)
+            (else
+             (let ((b (let ((x (assoc "body" (car cs)))) (and x (cdr x)))))
+               (or (parse-tier b) (loop (cdr cs)))))))))
+
+(define (parse-tier body)
+  (and (string? body)
+       (let ((i (find-sub body "**Intent tier ")))
+         (and i (let ((c (string-ref body (+ i 14))))
+                  (and (char-numeric? c) (- (char->integer c) 48)))))))
+
+(define (find-sub s sub)
+  (let ((n (string-length s)) (m (string-length sub)))
+    (let loop ((i 0)) (cond ((> (+ i m) n) #f)
+                            ((string=? (substring s i (+ i m)) sub) i)
+                            (else (loop (+ i 1)))))))
+
+;; Set by dispatch so the stage knows whether a human asked by name.
+(define current-command (list #f))
+(define (decision-command-name) (car current-command))
+
+;; The stage proper. Note the order: clone, agent, THEN the diff check and
+;; only then the push. The agent never holds the token and never pushes.
+(define (run-code-stage forge config event repo number issue mode)
+  (let* ((workdir (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                 "/mesthiri-work-" (number->string number)))
+         (hn (read-harness ".mesthiri" 'code))
+         (pname (or (harness-provider hn) (car (config-provider-names config))))
+         (model (harness-model hn))
+         (trace (string-append (or (env "RUNNER_TEMP") "/tmp")
+                               "/mesthiri-trace-code-" (number->string number) ".jsonl"))
+         (token (env "MESTHIRI_WRITER_TOKEN")))
+    (proc-run (list "rm" "-rf" workdir))
+    (git-clone (string-append "https://github.com/" repo) workdir token)
+    (git-branch workdir (branch-name-for number))
+    (let* ((title (let ((t (assoc "title" issue))) (and t (cdr t))))
+           (body  (let ((b (assoc "body" issue))) (and b (cdr b))))
+           (run (agent-runner hn pname model workdir trace))
+           (result (guard (e (#t (list (cons "summary" "the agent run failed")
+                                       (cons "tests_pass" #f))))
+                     (run (code-prompt title body (config-test-command config)))))
+           (ok (guard (e ((output-error? e)
+                          (list (cons "summary" (output-error-message e))
+                                (cons "tests_pass" #f))))
+                 (validate-output result implementation-schema)))
+           (green (cdr (assoc "tests_pass" ok)))
+           (summary (cdr (assoc "summary" ok))))
+      (cond
+       ((not green)
+        ;; Failure honesty: say where it got to on the issue rather than
+        ;; opening a pull request nobody can merge.
+        (post-comment forge event
+                      (failure-comment "The tests did not reach green." summary))
+        (log-info "code: not green, reported on the issue"))
+       ((not (git-has-changes? workdir))
+        (post-comment forge event
+                      (failure-comment "The agent reported success but changed nothing." #f))
+        (log-info "code: no changes"))
+       (else
+        (let* ((changed (git-changed-files workdir))
+               (verdict (check-diff changed (config-deny-paths config))))
+          (cond
+           ((string? verdict)
+            ;; Caught on the finished diff — the only check that can see what
+            ;; the agent actually touched.
+            (post-comment forge event verdict)
+            (log-warn "code: refused, diff touched a denied path"))
+           ((eq? mode 'dry-run)
+            (log-info "code: would open a PR with " (length changed)
+                      " file(s) changed [dry-run]"))
+           (else
+            (git-add-all workdir)
+            (git-commit workdir
+                        (string-append "Fix #" (number->string number))
+                        (string-append summary "\n\n"
+                                       (trailers (config-operator-name config)
+                                                 (config-operator-email config)
+                                                 "mesthiri[bot] <mesthiri@users.noreply.github.com>"
+                                                 mesthiri-version "pi"
+                                                 (or (config-agent-version config) "?")
+                                                 pname (or model "?")
+                                                 (or (env "MESTHIRI_RUN_URL") "-")))
+                        (config-operator-name config)
+                        (config-operator-email config))
+            (git-push workdir (branch-name-for number))
+            (forge-post forge (string-append "/repos/" repo "/pulls")
+                        (json-write-string
+                         (list (cons "title" (string-append "Fix #" (number->string number)))
+                               (cons "head" (branch-name-for number))
+                               (cons "base" "main")
+                               (cons "body" (pr-body number summary
+                                                     (or (env "MESTHIRI_RUN_URL") "-"))))))
+            (log-info "code: pull request opened")))))))))
+
 (define (triage-handler forge config event)
   (let* ((repo (event-repo event))
          (st (config-stage config 'triage))
@@ -264,7 +385,8 @@
     (log-context! "dispatch" (event-repo ev) (env "MESTHIRI_RUN_URL"))
     (let-values (((forge cfg) (authed-forge 'reader)))
       (let* ((handlers (list (cons 'triage triage-handler)
-                             (cons 'prioritize prioritize-handler)))
+                             (cons 'prioritize prioritize-handler)
+                             (cons 'code code-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
                   " stage=" (or (decision-stage d) "-")

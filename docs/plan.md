@@ -304,26 +304,26 @@ issues into an ordered `ready-to-implement` set, with a reason on each.
 
 ## M6 — Code stage
 
-- [ ] Eligibility before anything is spawned: refuse tier-2 issues unless
+- [x] Eligibility before anything is spawned: refuse tier-2 issues unless
       a write-permission `/implement` claimed them — the command is the
       authorization, and `max-tier` caps only the label-driven path; refuse
       a diff touching a denylisted path. Both refusals are comments naming
       the rule that fired.
-- [ ] Fresh clone in the job; `run-process` for git, never a shell, and no
+- [x] Fresh clone in the job; `run-process` for git, never a shell, and no
       `gh` — `forge.sld` is the only API path.
-- [ ] Drive the agent to an implementation with tests; run the *target
+- [x] Drive the agent to an implementation with tests; run the *target
       project's own* test command; iterate within budget.
-- [ ] **The job pushes, not the agent**: agent exits leaving commits, the
+- [x] **The job pushes, not the agent**: agent exits leaving commits, the
       job reads the diff outside the sandbox, re-checks the denylist, then
       pushes and opens the PR.
-- [ ] PR mechanics: author and `Signed-off-by` both the configured operator
+- [x] PR mechanics: author and `Signed-off-by` both the configured operator
       (checkers compare the two), `Co-authored-by: mesthiri[bot]`, a
       `Generated-by` trailer naming backend, version, provider/model and
       run URL, PR body
       saying in prose that the change is machine-generated. One issue, one
       PR; **never merge**. A test asserts a produced commit passes a DCO
       check the way the org's app applies it.
-- [ ] Failure honesty: a run that cannot reach green tests comments its
+- [x] Failure honesty: a run that cannot reach green tests comments its
       state on the issue rather than opening a broken PR.
 
 **Demo:** a closed-loop PR on `mesthiri/sandbox` from a seeded issue; a
