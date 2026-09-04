@@ -64,7 +64,7 @@ promptly and there is still nothing listening on a port.
       required. Admins are not enforced, so the owner can still push to
       `main` directly; flip `enforce_admins` when outside contributions
       start.
-- [ ] **DCO2 app** installed on `mesthiri/mesthiri` and `mesthiri/sandbox`
+- [x] **DCO2 app** installed on `mesthiri/mesthiri` and `mesthiri/sandbox`
       (human-only): <https://github.com/apps/dco-2>, source
       [cncf/dco2](https://github.com/cncf/dco2) — the same app the kaappi org
       uses, not the older `apps/dco`. `.github/dco.yml` is already seeded in
@@ -77,7 +77,8 @@ promptly and there is still nothing listening on a port.
       ```
 
       `infra/scripts/require-dco-check.sh` does this for kaappi repos but
-      hardcodes that org, so it does not apply here.
+      hardcodes that org, so it does not apply here. Installed org-wide
+      (`repository_selection: all`) on 2026-09-04.
 - [x] CI for this repo, docs half: `.github/workflows/docs.yml` validates
       every Mermaid block on push and pull request.
 - [x] CI for this repo, code half: `.github/workflows/test.yml` runs the
