@@ -262,28 +262,34 @@
       (message output-error-message))
 
     ;; schema is ((key . type) ...) with type in (string number boolean list).
+    ;;
+    ;; kaappi-json reads {} as the distinct json-empty-object value,
+    ;; which is not a list, so normalise it to the empty alist before
+    ;; the shape checks; a schema with required keys then fails on it
+    ;; the same way any object missing those keys would.
     (define (validate-output value schema)
-      (cond
-       ((not (list? value))
-        (raise (make-output-error "agent output is not an object")))
-       (else
-        (let loop ((s schema))
-          (cond
-           ((null? s) value)
-           (else
-            (let* ((key (caar s))
-                   (want (cdar s))
-                   (hit (assoc key value)))
-              (cond
-               ((not hit)
-                (raise (make-output-error
-                        (string-append "agent output is missing required key `"
-                                       key "`"))))
-               ((not (type-ok? (cdr hit) want))
-                (raise (make-output-error
-                        (string-append "agent output key `" key "` should be "
-                                       (symbol->string want)))))
-               (else (loop (cdr s))))))))))) 
+      (let ((value (if (json-empty-object? value) '() value)))
+        (cond
+         ((not (list? value))
+          (raise (make-output-error "agent output is not an object")))
+         (else
+          (let loop ((s schema))
+            (cond
+             ((null? s) value)
+             (else
+              (let* ((key (caar s))
+                     (want (cdar s))
+                     (hit (assoc key value)))
+                (cond
+                 ((not hit)
+                  (raise (make-output-error
+                          (string-append "agent output is missing required key `"
+                                         key "`"))))
+                 ((not (type-ok? (cdr hit) want))
+                  (raise (make-output-error
+                          (string-append "agent output key `" key "` should be "
+                                         (symbol->string want)))))
+                 (else (loop (cdr s)))))))))))) 
 
     (define (type-ok? v want)
       (case want

@@ -123,6 +123,15 @@
 (check "extra keys are allowed"
        #t (list? (validate-output (cons '("extra" . 1) good) schema)))
 
+;; kaappi-json reads {} as the distinct json-empty-object value, which
+;; is not a list; an empty object is a valid empty output, not "not an
+;; object", and a schema with required keys must still refuse it.
+(check "an empty object is valid output"
+       '() (validate-output (json-read-string "{}") '()))
+(check "an empty object refuses a schema with required keys"
+       #t (guard (e ((output-error? e) #t))
+            (validate-output (json-read-string "{}") schema) #f))
+
 ;; --- the trace ------------------------------------------------------------
 (write-trace "/tmp/mesthiri-trace-test.jsonl" (list (car frames) (cadr frames)))
 (check "the trace is one JSON object per line"
