@@ -31,10 +31,11 @@ mesthiri try owner/repo --rubric docs/dev/github-issues.md
 ```
 
 Releases ship a macOS arm64 binary for this local step alongside the Linux
-builds for CI. It runs uncontained on your laptop and says so at startup —
-which is why it calls a model directly (below) rather than spawning an
-agent. That reads your open issues with a personal access token, applies your
-rubric to each one, and prints the result. It writes nothing — no labels,
+builds for CI. Your laptop has no sandbox, and that is exactly why `try`
+calls a model directly (below) rather than spawning an agent — there is
+nothing running here that would need containing. It reads your open issues
+with a personal access token, applies your rubric to each one, and prints
+the result. It writes nothing — no labels,
 no comments, no branches — and it does not clone your repository.
 
 ```

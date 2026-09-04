@@ -28,8 +28,9 @@ humans set intent, define guardrails, and review outcomes. It is:
   (`kaappi-http`, `kaappi-json`, `kaappi-cli`, `kaappi-log`), and compiled
   with `zig build -Dbundle-src=` so a target repository needs a binary, not
   a Kaappi installation. Releases ship Linux x86_64 and arm64 for CI plus
-  macOS arm64 for local `try` and `install`, which run uncontained and say
-  so at startup;
+  macOS arm64 for local `try` and `install` — neither of which spawns an
+  agent, which is precisely why those two can run on a laptop where there
+  is no sandbox to spawn one into;
 - **agent-agnostic**: the coding agent is a subprocess speaking JSON over
   stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`); the
   interface is small enough that other headless agents can slot in.
@@ -135,14 +136,14 @@ is state a human can read, audit and correct without shell access.
 
 - **Workflow state lives in labels**: `ready-for-triage`, `triaged`,
   `ready-to-implement`, `in-progress`, `ready-for-review`, `needs-fix`,
-   `ready-for-merge`, `needs-human`. Transitions are guarded, states are
-   mutually exclusive, and a write is read back to confirm it took. **A new
-   commit clears every downstream label**, so an approval cannot outlive the
-   head that earned it. The labels are created through the API when `install`
-   opens its pull request — they are inert until the workflow exists — and
-   dispatch re-creates a missing one rather than failing a run. Dispatch
-   applies `ready-for-triage` on issue open, and the scheduled sweep
-   backstops it by picking up unlabeled or updated issues it finds by query.
+  `ready-for-merge`, `needs-human`. Transitions are guarded, states are
+  mutually exclusive, and a write is read back to confirm it took. **A new
+  commit clears every downstream label**, so an approval cannot outlive the
+  head that earned it. The labels are created through the API when `install`
+  opens its pull request — they are inert until the workflow exists — and
+  dispatch re-creates a missing one rather than failing a run. Dispatch
+  applies `ready-for-triage` on issue open, and the scheduled sweep
+  backstops it by picking up unlabeled or updated issues it finds by query.
 - **Idempotency** comes from the forge, not from a lock table: a job checks
   whether it has already acted on this comment, commit or event id before
   acting, and CI concurrency groups collapse rapid-fire edits into one run.

@@ -323,9 +323,11 @@ Uninstall reverses it and leaves no trace but the labels.
 
 ## Later / explicitly deferred
 
-- Reviewing pull requests mesthiri did not open, behind a spend gate worth
-  trusting. Useful, and not safe while the only brake is an approximate
-  per-day cap on a trigger any stranger can pull.
+- Reviewing pull requests mesthiri did not open **automatically**, on the
+  pull-request event. Explicit `/review` on such a pull request already
+  works and is permission-checked; what is deferred is the unprompted
+  version, which needs a spend gate worth trusting — an approximate per-day
+  cap is no defence on a trigger any stranger can pull.
 - Vendored installs: writing the workflow and pinning the binary into the
   target repo so nothing is fetched at run time. Worth having for an adopter
   who reviews everything they run; not worth two code paths before there is
@@ -353,9 +355,12 @@ Uninstall reverses it and leaves no trace but the labels.
 - **Prompt injection**: three layers answer it and none is prompt wording —
   the sandbox bounds what a subverted agent reaches, output validation
   bounds what it says, eligibility bounds what it may attempt.
-- **Containment is Linux-only**, which CI runners are; local development on
-  macOS runs uncontained and must say so loudly at startup, because a
-  security fallback that fails silently is worse than none.
+- **Containment is Linux-only**, which CI runners are. This bites only
+  where an agent is spawned: `try` and `install` spawn none, so the macOS
+  build is unaffected, but running a stage locally during development does,
+  and must say so loudly at startup — a security fallback that fails
+  silently is worse than none, and a warning printed where nothing needs
+  containing is how one gets ignored.
 - **Cross-run spend caps are approximate and derived**, not counted: with
   no cursor file there is nowhere to keep a counter, so a job queries recent
   run history before starting an expensive stage. Lagging, and defeatable by
