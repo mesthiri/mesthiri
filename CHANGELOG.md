@@ -9,6 +9,37 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-09-04
+
+### Fixed
+
+- **The agent runs contained on GitHub's runners.** It did not: bubblewrap is
+  not on the image, and installing it is not enough because Ubuntu 24.04
+  ships `kernel.apparmor_restrict_unprivileged_userns=1`, under which bwrap
+  is present, executable, and fails at `setting up uid map: Permission
+  denied`. The reusable workflow installs it, relaxes that sysctl for the
+  ephemeral runner VM, and proves a namespace can be created before the job
+  depends on it.
+- **`sandbox-available?` proves bwrap works rather than that it exists.**
+  Presence and function came apart exactly as above, and a presence check
+  reports a sandbox that is not there — the failure mode the module's own
+  header calls worse than having none.
+- **An uncontained agent is refused in CI**, where it was previously a
+  warning that left the run going and the agent uncontained.
+
+### Changed
+
+- **Egress is documented as unfiltered, because it is.** bwrap runs with
+  `--share-net`; `allowed-hosts` derives the list and `agent-smoke` reports
+  it, and nothing applies it. design.md, architecture.md, the guide and the
+  guardrails table each described a network control that does not exist.
+  Containment is the filesystem and the absence of any repository
+  credential; enforcement of the allowlist is an open item.
+- `tests/test-sandbox.scm` asserts the boundary — a file outside the workdir
+  cannot be written, the secrets directory is empty inside — with a baseline
+  that the wrap can run anything at all, since a wrap that fails for an
+  unrelated reason otherwise reads as perfect containment.
+
 ## [0.1.4] — 2026-09-04
 
 Cut from what the first run against a real model showed.
