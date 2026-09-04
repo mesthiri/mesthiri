@@ -1,0 +1,52 @@
+# Runs the module test suite. The suite deliberately needs no C-FFI library:
+# forge.sld takes an injected transport, so kaappi-http and kaappi-net — which
+# need a built shared object and OpenSSL — stay out of CI entirely. Only
+# kaappi-json, which is pure Scheme, is fetched.
+name: test
+
+# Unfiltered by path, like the docs check, so it is safe to mark required.
+# See .github/workflows/docs.yml for why the paths-ignore companion trick
+# does not work.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  KAAPPI_VERSION: v0.26.1
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the pinned kaappi binary
+        run: |
+          set -euo pipefail
+          curl -fsSL -o kaappi \
+            "https://github.com/kaappi/kaappi/releases/download/${KAAPPI_VERSION}/kaappi-x86_64-linux"
+          chmod +x kaappi
+          sudo mv kaappi /usr/local/bin/kaappi
+          kaappi --version
+
+      - name: Fetch kaappi-json
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/kaappi/kaappi-json ../kaappi-json
+
+      # openssl signs the App JWT; present on every standard image, but the
+      # jwt tests are the ones that would fail confusingly without it.
+      - name: Check openssl is present
+        run: openssl version
+
+      - run: ./tests/run-all.sh
+        env:
+          MESTHIRI_LIBS: ../kaappi-json/lib
