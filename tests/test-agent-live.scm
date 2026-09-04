@@ -97,7 +97,8 @@
                           '((tokens . 100000) (turns . 5))
                           (string-append scratch "/trace.jsonl")
                           (env-for)
-                          (string-append scratch "/stderr.log"))))
+                          (string-append scratch "/stderr.log")
+                          scratch)))
       (check "a real pi run reaches its terminal frame"
              'settled (run-record-outcome rec))
       (check "the turn is counted" 1 (run-record-turns rec))
@@ -121,7 +122,7 @@
     (write-agent-home! home (model-json port))
     (let ((rec (run-agent (pi-argv) "say hi" 3
                           '((tokens . 100000) (turns . 5))
-                          #f (env-for) #f)))
+                          #f (env-for) #f scratch)))
       (check "a hung model ends at the deadline, not never"
              'deadline (run-record-outcome rec)))
     ;; If the group kill missed, pi is still running now.
@@ -147,7 +148,7 @@
                                                "/usr/bin:/bin"))
                               (cons "HOME" home)
                               (cons "NO_COLOR" "1"))
-                        #f)))
+                        #f scratch)))
     (check "an unrunnable prompt is refused, not waited out"
            'refused (run-record-outcome rec))
     (check "and pi's own explanation is what comes back"

@@ -18,7 +18,19 @@
 
 ;; --- spawn arguments -----------------------------------------------------
 ;; Recon found the flag is --mode rpc, not --rpc. Four documents had it wrong.
-(define argv (agent-argv '((effort low)) 'deepseek "deepseek-v4-flash" "/w"))
+(define argv (agent-argv '((effort low)) 'deepseek "deepseek-v4-flash"))
+;; The working directory is not in argv and must not creep back into it: it
+;; is passed to spawn-process as `directory:`. When agent-argv took a workdir
+;; and quietly ignored it, the only thing setting a directory was bwrap's
+;; --chdir — so an uncontained run inherited mesthiri's own cwd, and a live
+;; local run had the agent reading the operator's checkout instead of the
+;; clone it was meant to judge.
+(check "argv carries no working directory"
+       #f (let loop ((a argv))
+            (cond ((null? a) #f)
+                  ((and (> (string-length (car a)) 0)
+                        (char=? (string-ref (car a) 0) #\/)) #t)
+                  (else (loop (cdr a))))))
 (check "the flag is --mode rpc" #t (and (member "--mode" argv) (member "rpc" argv) #t))
 (check "there is no --rpc" #f (and (member "--rpc" argv) #t))
 (check "provider and model are passed"

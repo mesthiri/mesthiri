@@ -66,7 +66,7 @@
       "\"cacheWrite\":0},\"contextWindow\":32000,\"maxTokens\":4096}]}}}\n")
      (render-models-json cfg (list (cons pname model))))))
 
-(define argv (agent-argv hn (if stub 'stub pname) (if stub "stub-1" model) clone))
+(define argv (agent-argv hn (if stub 'stub pname) (if stub "stub-1" model)))
 (define wrapped (or (sandbox-wrap argv clone (string-append clone "/secrets")) argv))
 (log-context! "local-triage" "mesthiri/sandbox" "-")
 (if (not (sandbox-available?))
@@ -89,7 +89,8 @@
                              (cons 'turns  (harness-budget hn 'turns)))
                        (string-append clone "/trace.jsonl")
                        env*
-                       (string-append clone "/agent-stderr.log")))
+                       (string-append clone "/agent-stderr.log")
+                       clone))
 
 (display "outcome  ") (display (run-record-outcome rec))
 (display "\nturns    ") (display (run-record-turns rec))

@@ -228,7 +228,7 @@
            ;; interactive install are simply not there.
            (home (string-append workdir "/.agent-home"))
            (stderr-path (string-append workdir "/agent-stderr.log"))
-           (argv (agent-argv harness provider-name model workdir))
+           (argv (agent-argv harness provider-name model))
            (wrapped (or (sandbox-wrap argv workdir
                                       (string-append workdir "/secrets"))
                         argv)))
@@ -260,7 +260,8 @@
                                    (cons 'turns  (harness-budget harness 'turns)))
                              trace
                              (agent-env provider secret home)
-                             stderr-path)))
+                             stderr-path
+                             workdir)))
         (log-info "agent " (run-record-outcome rec)
                   " turns=" (run-record-turns rec)
                   " tokens=" (run-record-tokens rec)

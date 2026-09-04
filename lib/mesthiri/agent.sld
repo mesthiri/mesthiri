@@ -39,7 +39,14 @@
 
     ;; --- spawn arguments ---------------------------------------------------
 
-    (define (agent-argv harness provider-name model workdir)
+    ;; No workdir here: the working directory is set by `run-agent` through
+    ;; `directory:`, not by anything in argv. This procedure used to take a
+    ;; `workdir` and ignore it, which reads exactly like it handles the
+    ;; question — and the only thing actually setting a directory was
+    ;; bwrap's `--chdir`. So an uncontained run inherited whatever
+    ;; directory mesthiri was launched from: on a laptop, the operator's
+    ;; own checkout, with the agent's write tools pointed at it.
+    (define (agent-argv harness provider-name model)
       (append
        (list "pi" "--mode" "rpc"
              "--no-session"          ; no session file in the scratch clone
@@ -286,7 +293,8 @@
     ;; `read-line` in the main fiber parks rather than stalling the scheduler,
     ;; which is what makes the watchdog run at all. Both halves were checked
     ;; against a real process before this was written.
-    (define (run-agent argv prompt deadline-secs budget trace-path env stderr-path)
+    (define (run-agent argv prompt deadline-secs budget trace-path env
+                       stderr-path workdir)
       (let* ((errp (and stderr-path (open-output-file stderr-path)))
              (proc (apply spawn-process
                           argv
@@ -294,7 +302,11 @@
                           'stdout: 'pipe
                           'stderr: (if errp errp 'null)
                           'new-group: #t
-                          (if env (list 'env: env) '()))))
+                          (append
+                           (if env (list 'env: env) '())
+                           ;; The agent runs where it was told to, whether
+                           ;; or not there is a sandbox to chdir it.
+                           (if workdir (list 'directory: workdir) '())))))
         (let ((in  (process-stdin proc))
               (out (process-stdout proc))
               (timed-out (list #f)))
