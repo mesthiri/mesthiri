@@ -48,26 +48,34 @@ Each stage is a fiber (or pool of worker fibers) in one process:
 
 ## Process supervision
 
-The agent, git, and gh are all subprocesses. Requirements that drove
-KEP-0022 and define what mesthiri needs from `(kaappi process)`:
+The agent, git, and gh are all subprocesses, supervised through
+`(kaappi process)` (KEP-0022, **shipped in kaappi v0.26.0** — the KEP is
+Final; mesthiri requires kaappi ≥ 0.26). Every requirement mesthiri stated
+is met by what shipped:
 
 - streaming bidirectional pipes as fiber-parking ports (`pi --rpc` is a
-  long-lived JSON event stream);
-- Python's timeout contract (timeout leaves the child for the caller to
-  kill and drain) and process-group / Job-Object **tree-kill** — an agent's
-  own bash children must die with it;
+  long-lived JSON event stream) — `spawn-process` with `'pipe` specs;
+- Python's timeout contract (`process-wait 'timeout:` leaves the child for
+  the caller to kill and drain) and **tree-kill** — `new-group: #t` +
+  `process-kill 'group: #t` (a process group on POSIX, a Job Object on
+  Windows), so an agent's own bash children die with it;
 - argv-only spawning — issue text is untrusted and must never reach a
-  shell;
+  shell (the library has no shell mode at all);
 - budgets: wall-clock timeout per run, token/turn budget passed to the
   agent, per-night caps per stage.
 
-### Interim: the shim
+Two shipped details stage code should assume: long-lived agent runs use
+`spawn-process` (drive stdin/stdout from fibers, `process-wait` with a
+deadline, group-kill on expiry); one-shot tool calls (`git`, `gh`) use
+`run-process`, whose `timeout:` implies `new-group: #t` and kills with
+SIGKILL, and whose stdin defaults to `'null` unless `input:` is given.
 
-Until KEP-0022 Phases 1–2 land in a kaappi release, the agent runs behind
-`socat TCP-LISTEN:<port>,fork EXEC:'pi --rpc'` under systemd, and mesthiri
-connects with `kaappi-net`. The shim is scaffolding: it is deleted the day
-`(kaappi process)` ships, and nothing in the stage code may depend on its
-existence (all process access goes through one `mesthiri agent` module).
+An earlier revision of this document specified a socat shim as an interim
+transport while KEP-0022 was unreleased; it was never built and is no
+longer needed. The one-module rule survives it for a different reason:
+`lib/mesthiri/agent.sld` isolates the *agent protocol* (spawn arguments,
+RPC framing, budget enforcement), so a second agent backend is a new
+module, not a change to stage code.
 
 ## State
 

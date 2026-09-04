@@ -9,15 +9,16 @@ an orchestrator that directs headless coding agents through the software
 development lifecycle, while humans set direction, define guardrails, and
 review outcomes.
 
-## Status: pre-alpha (design phase)
+## Status: pre-alpha (design settled, implementation unblocked)
 
-Nothing runs yet. The design is settled (see
-[docs/design.md](docs/design.md)); implementation starts with the triage
-stage. The project dogfoods its own toolchain: mesthiri is written in Kaappi,
-and its subprocess needs drove
+Nothing runs yet, but nothing is waiting on the platform anymore. The
+design is settled (see [docs/design.md](docs/design.md)), and the project's
+subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
-(native `(kaappi process)` support, tracked in
-[kaappi#2418](https://github.com/kaappi/kaappi/issues/2418)).
+— native `(kaappi process)` support — which **shipped in Kaappi v0.26.0**
+(all four phases; the KEP is Final). mesthiri therefore requires
+**Kaappi ≥ 0.26** and builds directly on `spawn-process`/`run-process`;
+implementation starts with the triage stage.
 
 ## The pipeline
 
