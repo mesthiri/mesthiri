@@ -8,7 +8,8 @@
         (scheme process-context) (scheme file)
         (kaappi http) (kaappi json)
         (mesthiri config) (mesthiri jwt) (mesthiri forge) (mesthiri event)
-        (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc))
+        (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
+        (mesthiri version))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -227,7 +228,8 @@
     (explain-event cfg ev)))
 
 (define (usage)
-  (display "mesthiri — CI-native ADLC orchestrator\n\n")
+  (display "mesthiri ") (display mesthiri-version)
+  (display " — CI-native ADLC orchestrator\n\n")
   (display "  dispatch\n")
   (display "      Normalize the CI event, authorize it, match one stage, run it.\n")
   (display "      Reads MESTHIRI_EVENT_NAME, MESTHIRI_EVENT_PATH, MESTHIRI_REPO.\n\n")
@@ -241,6 +243,8 @@
 
 (let ((args (cdr (command-line))))
   (cond ((null? args) (usage))
+        ((or (string=? (car args) "--version") (string=? (car args) "version"))
+         (display mesthiri-version) (newline))
         ((string=? (car args) "whoami") (cmd-whoami (cdr args)))
         ((string=? (car args) "dispatch") (cmd-dispatch (cdr args)))
         ((string=? (car args) "explain-event") (cmd-explain (cdr args)))
