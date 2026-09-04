@@ -9,6 +9,30 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-09-04
+
+### Fixed
+
+- **The code stage can open a pull request.** It could not: `authed-forge`
+  minted an installation token and returned only the forge, so
+  `MESTHIRI_WRITER_TOKEN` — the variable the stage read to clone and push
+  with — was set by nothing. The clone was anonymous and `git push origin`
+  had no credential. The stage now mints a writer token itself; dispatch
+  still runs on the reader, and the writer is the only App that pushes or
+  opens anything.
+- **The push credential never lands in the clone.** It reached git through
+  the remote URL, which git writes into the clone's `.git/config` — and the
+  clone is the directory the agent runs in with read tools. It now travels
+  as a file read by a credential helper: not in the URL, and not in argv
+  either.
+- **The deny-paths check sees untracked files.** The stage commits with `git
+  add -A` while the check ran on `git diff --name-only`, which lists only
+  modified tracked files. The gap is where an agent's stray output lands —
+  unseen by the check, then swept into the pull request.
+- **The agent's scratch moved out of the clone.** HOME and the stderr log
+  were written inside the working tree; a real run put pi's home and a
+  stderr log into a repository.
+
 ## [0.1.8] — 2026-09-04
 
 ### Fixed
