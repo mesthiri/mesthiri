@@ -59,10 +59,15 @@ forge event ──► shim workflow ──► reusable workflow ──► mesthi
 ```
 
 **The shim** is a thin workflow committed to the target repository. It
-subscribes to native triggers (`issues`, `issue_comment`, `pull_request`,
-`pull_request_review`) plus a `schedule` for the cron stages, and does
-nothing but call the reusable workflow. It is deliberately small so that
-upgrades ship upstream rather than through a pull request to every repo.
+subscribes to native triggers (`issues`, `issue_comment`,
+`pull_request_target`, `pull_request_review`) plus a single hourly
+`schedule` tick, and does nothing but call the reusable workflow. It is
+deliberately small so that upgrades ship upstream rather than through a
+pull request to every repo. Stage schedules live in `config.scm` as
+whole-hour UTC times; dispatch matches each tick against them and runs
+whatever is due, so a schedule change is a config edit and the shim never
+changes. GitHub's scheduler is best-effort — a delayed tick runs its
+stages late rather than never.
 
 **PR events use `pull_request_target`, and the shim never checks out the
 pull request's code.** A workflow triggered by `pull_request` runs the
@@ -103,7 +108,9 @@ matching stage in that job. One event, one stage, one job.
    because a finding that cannot survive a refutation attempt is noise. An
    explicit `/review` on a pull request mesthiri did not open fetches the
    diff through the API into a read-only clone the agent cannot push from —
-   the same sandbox minus any write path.
+   the same sandbox minus any write path. The restriction itself is a
+   built-in dispatch check, not a trigger predicate — a config cannot relax
+   it — and `explain-event` reports it alongside the predicates it tested.
 
    The restriction is a spend gate, not modesty. `pull_request_target` fires
    for fork pull requests, so reviewing every incoming PR would let anyone
@@ -131,8 +138,10 @@ is state a human can read, audit and correct without shell access.
    `ready-for-merge`, `needs-human`. Transitions are guarded, states are
    mutually exclusive, and a write is read back to confirm it took. **A new
    commit clears every downstream label**, so an approval cannot outlive the
-   head that earned it. Label definitions ship in the install pull request;
-   dispatch applies `ready-for-triage` on issue open, and the scheduled sweep
+   head that earned it. The labels are created through the API when `install`
+   opens its pull request — they are inert until the workflow exists — and
+   dispatch re-creates a missing one rather than failing a run. Dispatch
+   applies `ready-for-triage` on issue open, and the scheduled sweep
    backstops it by picking up unlabeled or updated issues it finds by query.
 - **Idempotency** comes from the forge, not from a lock table: a job checks
   whether it has already acted on this comment, commit or event id before
@@ -155,7 +164,8 @@ run enforces it on itself. A cap *across* runs has nowhere to keep a
 counter, so it is derived instead: before starting an expensive stage, a job
 queries recent workflow runs and their traces and declines if the day's
 spend already looks exhausted. The per-day cap counts **runs started**;
-schedules are **UTC cron**. Approximate, lagging, and defeatable by
+schedules are whole-hour UTC, matched against the shim's hourly tick.
+Approximate, lagging, and defeatable by
 concurrent jobs starting at once — good enough to stop a runaway, not to
 bill against. The alternative was a database, and the database was the thing
 being deleted.
@@ -242,7 +252,8 @@ for the same reason.
 
 **Trigger expressions** decide which stage an event runs. They are
 predicates over the normalized event, written in a small s-expression
-language — `(and (event-type? 'issue-comment) (command? "/implement"))` —
+language of short forms composed with `and`/`or` — the code stage's is
+`(or (label "ready-to-implement") (command "/implement"))` —
 **interpreted, never `eval`ed**. The config comes from the repository's base
 branch and is maintainer-controlled, but an interpreter over a fixed
 predicate vocabulary cannot be talked into arbitrary execution, and `eval`
@@ -355,7 +366,8 @@ merging the install pull request would start opening real ones, which is not
 what "install" should mean. The code stage additionally carries `max-tier`,
 defaulting to 0, which is what rungs four and five of the ladder actually
 move. There is no rung on which
-mesthiri merges, and tier 2 waits for a human at every rung.
+mesthiri merges, and tier 2 waits for a human at every rung — the wait ends
+with `/implement` from someone with write access, and nothing else ends it.
 
 ## Eligibility: what mesthiri may attempt
 
@@ -368,9 +380,14 @@ should be attempted. Two checks run before an agent is spawned:
   reads the diff, and again as an automatic escalation in review.
 - **An intent tier**: 0 pre-authorized and trivially revertible, 1 a single
   issue suffices, 2 a human must explicitly authorize before the code stage
-  may claim it. Triage proposes a tier; only a human raises the ceiling.
-  Review re-derives it from the diff independently, so a change that grew
-  past its authorization is caught by someone other than its author.
+  may claim it. That authorization is `/implement`: an explicit act by
+  someone with write permission on that very issue, which is what "a human
+  authorized this" means — there is deliberately no second mechanism and no
+  label for it. The tier a verdict proposes is recorded in the verdict and
+  the run record, never as a label. `max-tier` caps what the label-driven
+  path may claim; it does not cap a human's own command. Review re-derives
+  the tier from the diff independently, so a change that grew past its
+  authorization is caught by someone other than its author.
 
 ## Commands
 
@@ -382,7 +399,15 @@ that can **change code** needs write or better (`/implement`, `/fix`); a
 command that only produces **commentary** — comments, labels, issues —
 needs triage or better (`/triage`, `/review`, `/retro`). Spend is not the
 test, since every one of them costs tokens. An unauthorized
-command gets a refusal comment, not silence. Prioritize has no command: it
+command gets a refusal comment, not silence.
+
+**Labels that trigger a stage are authorized the same way.** The code stage
+fires on `ready-to-implement`, and anyone holding GitHub's triage role can
+apply a label — so a label a human applies is checked against that human's
+permission exactly as the matching command would be (write, for a stage
+that changes code). Labels mesthiri's own Apps apply pass the check: that
+is the pipeline moving work a schedule or an already-authorized command
+set in motion, not a new claim. Prioritize has no command: it
 ranks a backlog, which is not a thing you ask for one of
 (fullsend's ADR 0076 reaches the same split for implement/fix).
 

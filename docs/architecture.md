@@ -80,13 +80,13 @@ once, inside the binary, whatever fired it.
 flowchart TD
   ev1["issues,<br/>issue_comment"] --> shim
   ev2["pull_request_target,<br/>pull_request_review"] --> shim
-  ev3["schedule<br/>cron stages"] --> shim
+  ev3["schedule<br/>hourly tick"] --> shim
 
   shim["shim workflow in the target repo<br/>never checks out PR code"] -->|"workflow_call"| reuse
   reuse["reusable workflow<br/>download pinned binary, verify checksum"] --> disp
 
   disp["mesthiri dispatch"] --> norm["normalize<br/>one event shape"]
-  norm --> authz{"authorized?<br/>commenter's repo permission"}
+  norm --> authz{"authorized?<br/>commenter's or labeler's permission"}
   authz -->|"no"| refuse["refusal comment<br/>naming the rule"]
   authz -->|"yes"| dedupe{"already acted<br/>on this event id?"}
   dedupe -->|"yes"| drop["exit, idempotent"]
@@ -185,10 +185,10 @@ to the forge.
 Workflow state lives on the repository where a human can read it and change
 it. There is no database it could live in instead — these labels are the
 state. Transitions are guarded, states are mutually exclusive, and every
-write is read back to confirm it took. Label definitions ship in the
-install pull request; dispatch applies `ready-for-triage` on issue open,
-and the scheduled sweep backstops unlabeled or updated issues it finds by
-query.
+write is read back to confirm it took. The labels are created with the
+install pull request and re-created on demand if deleted; dispatch applies
+`ready-for-triage` on issue open, and the scheduled sweep backstops
+unlabeled or updated issues it finds by query.
 
 ```mermaid
 stateDiagram-v2

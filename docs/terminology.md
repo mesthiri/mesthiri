@@ -48,9 +48,10 @@ stage.
 arrived from an issue, a comment, a pull request, a review or a schedule.
 Stages read this rather than raw forge payloads.
 
-**Trigger predicate** — the expression deciding whether a stage runs, e.g.
-`(and (event-type? 'issue-comment) (command? "/implement"))`. Written in
-s-expressions and **interpreted over a fixed vocabulary, never `eval`ed**.
+**Trigger predicate** — the expression deciding whether a stage runs: short
+forms over a fixed vocabulary, composed with `and`/`or` — the code stage's
+is `(or (label "ready-to-implement") (command "/implement"))`.
+**Interpreted, never `eval`ed**.
 
 **Command** — a slash command in a comment: `/triage`, `/implement`,
 `/review`, `/fix`, `/retro`. Parsed by a plain grammar, never by a model.
@@ -97,10 +98,15 @@ writes a starter one the repository then owns.
 
 **Intent tier** — how much authorization the work needs, independent of
 urgency. Tier 0 is pre-authorized and trivially revertible; tier 1 is
-authorized by the issue itself; tier 2 needs a human to say so explicitly.
+authorized by the issue itself; tier 2 needs a human to say so explicitly —
+and that saying-so is `/implement` from someone with write access. The
+proposed tier is recorded in the verdict and the run record, never as a
+label.
 
-**Max-tier** — the code stage's ceiling, defaulting to 0. What the fourth
-and fifth rungs of the adoption ladder actually change.
+**Max-tier** — the code stage's ceiling, defaulting to 0, capping what the
+label-driven path may claim; a human's explicit `/implement` is not capped
+by it. What the fourth and fifth rungs of the adoption ladder actually
+change.
 
 **Deny-paths** — files no mesthiri change may touch, checked against the
 finished diff before a pull request is opened and again in review.
@@ -113,8 +119,9 @@ output.
 `ready-for-triage`, `triaged`, `ready-to-implement`, `in-progress`,
 `ready-for-review`, `needs-fix`, `ready-for-merge`, `needs-human`. Guarded
 transitions, mutually exclusive, and a new commit clears every downstream
-label. Definitions ship in the install pull request; dispatch applies
-`ready-for-triage` on issue open and the sweep backstops the rest.
+label. Created with the install pull request — and re-created on demand if
+deleted — dispatch applies `ready-for-triage` on issue open and the sweep
+backstops the rest.
 
 **Adoption ladder** — the documented progression from `mesthiri try`
 through dry-run, live, tier 0, tier 1, to review and fix. No rung merges.
@@ -127,7 +134,9 @@ Their name is in `config.scm`, they sign off every commit
 mesthiri makes, and they are the person accountable for its output.
 
 **Commenter** — whoever issued a slash command. Authorization is checked
-against *their* permission on the repository, never mesthiri's.
+against *their* permission on the repository, never mesthiri's. A label a
+human applies that triggers a stage authorizes the same way, against the
+labeler's permission; labels mesthiri's own Apps apply pass.
 
 **Maintainer** — anyone with write access. Relevant because a maintainer
 can obtain the repository's secrets, which is why an App must never grant

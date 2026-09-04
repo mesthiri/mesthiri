@@ -64,8 +64,9 @@ label state machine — are in
 There is no server and no database. A thin shim workflow in your repository
 subscribes to native forge events and a schedule, and calls a reusable
 workflow that downloads one checksummed Kaappi-compiled binary and runs
-`mesthiri dispatch`: normalize the event, authorize it against the
-commenter's own permission, match it to exactly one stage, run that stage in
+`mesthiri dispatch`: normalize the event, authorize it against the actor's
+own permission — the commenter's for a command, the labeler's for a label —
+match it to exactly one stage, run that stage in
 that job. The coding agent — [pi](https://pi.dev/) first, via its `--rpc`
 JSON-over-stdio mode — runs inside a namespace sandbox within the job, with
 the scratch clone as its only writable path. State lives in the repository:

@@ -88,7 +88,7 @@ code cannot write it:
 | App | Used by | Permissions |
 |---|---|---|
 | `mesthiri-reader` | triage, prioritize, review, retro | issues and pull requests: write (for comments and labels); contents: **read** |
-| `mesthiri-writer` | code, fix | contents: write; pull requests: write |
+| `mesthiri-writer` | code, fix | contents: write; pull requests: write; issues: write (state comments on the issue) |
 
 Neither gets merge permission. That is not a setting you can turn on later
 by accident — mesthiri has no code path that merges anything.
@@ -154,9 +154,12 @@ mesthiri install owner/repo
 
 This opens a pull request against your repository adding three files: a shim
 workflow under `.github/workflows/`, a starter `.mesthiri/config.scm`, and a
-starter rubric. Read it like any other pull request. Merging it is what
-turns mesthiri on — and creates the 8 workflow labels dispatch and the
-sweeps coordinate through. (`install` refuses `mesthiri/mesthiri` itself.)
+starter rubric. Read it like any other pull request. The 8 workflow labels
+dispatch and the sweeps coordinate through are created through the API when
+the pull request is opened — they are inert until the workflow exists, and
+dispatch re-creates any you delete rather than failing a run. Merging the
+pull request is what turns mesthiri on. (`install` refuses
+`mesthiri/mesthiri` itself.)
 
 ```
 mesthiri install — opening a pull request, changing nothing directly
@@ -242,7 +245,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
 
   (budgets
     (per-run (tokens 200000) (turns 40) (wall-clock "20m"))
-    (per-day (runs 12)))          ; approximate runs-started cap + UTC cron — see "About budgets"
+    (per-day (runs 12)))          ; approximate runs-started cap — see "About budgets"
 
   ;; Minimum repository permission to issue each command.
   (commands (triage    (min-permission triage))
@@ -256,19 +259,23 @@ code and a fork carries a copy. It is s-expressions, read as data.
   (stages
     (triage     (on (or (issue-opened) (issue-reopened) (schedule "07:00")))
                 (mode dry-run))                    ; ← the line to change
-    (prioritize (on (schedule "07:30"))            (mode off))
-    (code       (on (label "ready-to-implement"))  (mode off)
+    (prioritize (on (schedule "08:00"))            (mode off))
+    (code       (on (or (label "ready-to-implement")
+                        (command "/implement")))   (mode off)
                 (max-tier 0))                      ; raise to 1 when ready
     (review     (on (pull-request-updated))        (mode off))
+                ;; only PRs mesthiri opened — built into dispatch, not a predicate
     (fix        (on (findings-posted))             (mode off))
     (retro      (on (schedule "sunday 06:00"))     (mode off))))
 ```
 
 The expressions after `on` are predicates over the event, drawn from a
-fixed vocabulary, with schedules as UTC cron. They are interpreted, not
-evaluated — a config file cannot become a program. This sample is the
-scaffold contract: `install` produces it, down to the deny-paths, `max-tier
-0`, budgets and pinned versions.
+fixed vocabulary of short forms, with schedules as whole-hour UTC times.
+They are interpreted, not evaluated — a config file cannot become a
+program. The shim carries a single hourly tick and dispatch matches it
+against these schedules, so changing one is a config edit, not a pull
+request. This sample is the scaffold contract: `install` produces it, down
+to the deny-paths, `max-tier 0`, budgets and pinned versions.
 
 ## Choosing models
 
@@ -380,6 +387,11 @@ Your own permission is what counts, not mesthiri's:
 > If this should go ahead, someone with write access can issue the command
 > or apply `ready-to-implement`.
 
+Labels are authorized the same way: applying `ready-to-implement` yourself
+is checked like `/implement`, so a human's label needs write. Labels the
+prioritize stage applies are mesthiri moving its own work forward and are
+not re-checked.
+
 ### Why review only runs on mesthiri's pull requests
 
 Review does not fire on pull requests other people open, and that is a
@@ -440,8 +452,10 @@ for a while:
 6. Review and fix `(mode live)`.
 
 Tier 2 work — features, migrations, anything cross-cutting — always waits
-for a human to authorize it, at every step. There is no configuration that
-changes that, and no step 7 in which mesthiri merges.
+for a human to authorize it, at every step. That authorization is
+`/implement` from someone with write access — a human asking for that work
+by name; there is deliberately no label for it and no configuration that
+substitutes. And there is no step 7 in which mesthiri merges.
 
 ## About budgets
 
@@ -450,8 +464,8 @@ time and stops itself.
 
 The per-day cap is not exact. mesthiri keeps no database, so before an
 expensive stage a job looks at recent run history and declines if the day
-already looks spent. The cap counts runs started, and schedules are UTC
-cron. That lags, and two jobs starting at the same moment
+already looks spent. The cap counts runs started, and schedules are
+whole-hour UTC. That lags, and two jobs starting at the same moment
 can both decide there is room. It is a runaway stop, not an accounting
 system. If you need a hard ceiling, set one on your CI spending, where it
 can actually be enforced.

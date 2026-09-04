@@ -30,10 +30,12 @@ promptly and there is still nothing listening on a port.
 - [x] Repo seeded: README, design.md, CLAUDE.md, kaappi.pkg, MIT license
 - [x] Design unblocked: kaappi v0.26.0 shipped KEP-0022
 - [ ] **GitHub Apps** (human-only): register a **reader** App (triage,
-      review — Issues and Pull requests write for comments and labels, code
-      read) and a **writer** App (code, fix — Contents write), neither with
-      merge permission, neither with a webhook URL. Store each private key
-      as a repository secret on the target.
+      prioritize, review, retro — Issues and Pull requests write for
+      comments and labels, contents read) and a **writer** App (code, fix —
+      Contents write for commits and branches, Pull requests write for the
+      PR, Issues write for state comments on the issue), neither with merge
+      permission, neither with a webhook URL. Store each private key as a
+      repository secret on the target.
 - [ ] **pi recon** (blocks M3): install pi, pin the version, capture its
       real `--rpc` frame schema into `docs/pi-rpc.md` plus a fixture. Note
       what it needs from filesystem and network — M3's sandbox policy comes
@@ -86,8 +88,10 @@ The heart of the re-architecture. Until this works, nothing else can.
 
 - [ ] `mesthiri dispatch` — normalize, authorize, match a trigger, run one
       stage. One event, one stage, one job.
-- [ ] The shim workflow, in `templates/`: native triggers plus `schedule`,
-      calling the reusable workflow and nothing else. **PR events use
+- [ ] The shim workflow, in `templates/`: native triggers plus a single
+      hourly `schedule` tick — dispatch matches the tick against each
+      stage's configured whole-hour UTC schedule — calling the reusable
+      workflow and nothing else. **PR events use
       `pull_request_target` and the shim never checks out the PR's code** —
       a test asserts the template contains no such checkout, because the
       failure mode is handing credentials to anyone who opens a pull
@@ -97,7 +101,10 @@ The heart of the re-architecture. Until this works, nothing else can.
 - [ ] Commands: `/triage`, `/implement`, `/review`, `/fix`, `/retro` parsed
       by a plain grammar, authorized against the commenter's permission,
       restricted to the entity holding their inputs, refused with an
-      explanatory comment when unauthorized. Tests include a command-shaped
+      explanatory comment when unauthorized. A label a human applies that
+      triggers a stage authorizes identically, against the labeler's
+      permission — write for the code and fix stages — while labels
+      mesthiri's own Apps apply pass. Tests include a command-shaped
       string inside an issue body that must not execute.
 - [ ] Idempotency: a handler checks whether it already acted on this event
       id before acting; a CI concurrency group collapses rapid edits.
@@ -165,8 +172,9 @@ cannot reach a host off the allowlist.
 - [ ] `lib/mesthiri/triage.sld` — verify the issue's claims against a
       checkout using the M3 agent, classify per the rubric read from the
       target repo at its configured path, propose exactly one `priority:`
-      label and an intent tier, comment the rationale, record the rubric's
-      commit SHA in the verdict.
+      label and an intent tier (the tier lives in the verdict and run
+      record, never as a label), comment the rationale, record the
+      rubric's commit SHA in the verdict.
 - [ ] Stage `mode` — `off` | `dry-run` | `live`, defaulting to **off**.
       A freshly installed repo has triage in dry-run and everything else
       off; merging an install pull request must not start opening real
@@ -210,9 +218,11 @@ issues into an ordered `ready-to-implement` set, with a reason on each.
 
 ## M6 — Code stage
 
-- [ ] Eligibility before anything is spawned: refuse tier-2 issues without
-      explicit human authorization; refuse a diff touching a denylisted
-      path. Both refusals are comments naming the rule that fired.
+- [ ] Eligibility before anything is spawned: refuse tier-2 issues unless
+      a write-permission `/implement` claimed them — the command is the
+      authorization, and `max-tier` caps only the label-driven path; refuse
+      a diff touching a denylisted path. Both refusals are comments naming
+      the rule that fired.
 - [ ] Fresh clone in the job; `run-process` for git, never a shell, and no
       `gh` — `forge.sld` is the only API path.
 - [ ] Drive the agent to an implementation with tests; run the *target
@@ -283,9 +293,10 @@ stage that spent its budget without reaching green.
 
 - [ ] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
       a **starter rubric**, since most repos have none and "first write a
-      policy document" is a poor first five minutes), label definitions,
-      and the shim workflow as a pull request, in ordered layers that
-      install forward, uninstall in reverse, and report status. The
+      policy document" is a poor first five minutes), create the workflow
+      labels through the API, and open the shim workflow as a pull request,
+      in ordered layers that install forward, uninstall in reverse, and
+      report status. The
       scaffolded config matches the guide's sample (App IDs, deny-paths,
       `max-tier 0`, budgets, pinned versions). The layering idea is
       fullsend's ADR 0006.
