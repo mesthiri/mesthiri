@@ -188,6 +188,20 @@ git push origin main && git push origin vX.Y.Z
 gh release create vX.Y.Z /tmp/rel/* --title "vX.Y.Z" --notes-file /tmp/notes.md
 ```
 
+## Step 7a — Watch the run **for this tag**, not the latest run
+
+```bash
+RID=$(gh run list --workflow release.yml --limit 5 \
+        --json databaseId,headBranch --jq '.[] | select(.headBranch=="vX.Y.Z") | .databaseId')
+until [ "$(gh run view $RID --json status --jq .status)" = "completed" ]; do sleep 20; done
+gh run view $RID --json conclusion --jq .conclusion
+```
+
+`gh run list --limit 1` right after a tag push returns the **previous**
+release's run, because the new one has not registered yet. That has already
+happened here: it reported success for v0.1.8 while v0.1.9 was still
+building, and the pin was rolled forward to a release that did not exist.
+
 ## Step 8 — Verify the published release before rolling it out
 
 Download what you published, from the URL an installed repo will use, and
@@ -203,6 +217,13 @@ grep " mesthiri-x86_64-linux$" SHA256SUMS | shasum -a 256 -c -
 
 If that fails, stop. Do not proceed to Step 9 — an unrolled-out bad release
 harms nobody.
+
+**Gate the rollout on it in the shell, not in your head.** Run the checks and
+the pin bump as one `set -e` block, or read the output before editing the
+workflow. Verification on one line and the rollout on the next means the
+rollout runs anyway when the check fails — the same shape as this project's
+rule about a failed edit and the commit on the following line, and it has
+bitten here too.
 
 ## Step 9 — Roll out by moving the major tag
 
