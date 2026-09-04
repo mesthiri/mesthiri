@@ -9,6 +9,33 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.13] — 2026-09-04
+
+### Fixed
+
+- **The `fix` stage is wired up.** It has been a first-class command since
+  M7 — in `command-table`, in `all-stages`, its module written, imported and
+  tested — with no handler ever registered. A typed `/fix` parsed, passed
+  authorization, and produced nothing: `no-handler` was an outcome that
+  posted no comment. This is the second command to fail at the seam between
+  a well-tested module and the entry point, after `/review` in 0.1.12.
+
+- **A command whose stage has no handler now says so**, naming the stage and
+  the version, and stating that this is a bug in mesthiri rather than in
+  what the user typed. Silence was what let the above go unnoticed for two
+  milestones.
+
+### Added
+
+- **`scripts/check-handlers.sh`** compares the command table against the
+  registered handlers and runs as part of the suite, because reading the two
+  lists side by side is exactly what nobody does.
+
+- **`git-clone-branch` and `git-log-subjects`.** Fix works on an existing
+  branch, and counts its own previous attempts from that branch's commit
+  subjects — so its clone takes the branch by name and is 50 commits deep,
+  not the default branch one commit deep.
+
 ## [0.1.12] — 2026-09-04
 
 ### Fixed
