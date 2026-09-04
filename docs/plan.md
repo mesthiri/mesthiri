@@ -317,7 +317,8 @@ stage that spent its budget without reaching green.
       policy document" is a poor first five minutes), create the workflow
       labels through the API, and open the shim workflow as a pull request,
       in ordered layers that install forward, uninstall in reverse, and
-      report status. The
+      report status — `mesthiri uninstall <owner/repo>` is the guide's exit
+      route and opens the reversing pull request. The
       scaffolded config matches the guide's sample (App IDs, deny-paths,
       `max-tier 0`, budgets, pinned versions). The layering idea is
       fullsend's ADR 0006.

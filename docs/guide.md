@@ -493,6 +493,13 @@ could not reach green tests inside its budget. The comment says where it
 got to. That is deliberate: a run that cannot finish reports its state
 rather than opening a pull request that wastes your review.
 
+**Authentication fails, or a stage cannot see the repository.** Almost
+always a paste. The App IDs in `.mesthiri/config.scm` and the private keys
+in your secrets have to be the same pair, and reader and writer are easy to
+swap. `mesthiri whoami` mints a token from a key and prints which
+installation it actually belongs to, what permissions it holds and the
+remaining rate limit — run it and compare against the table above.
+
 **A run was refused for touching a denied path.** Working as intended, and
 the comment names the rule and the file. If the path should be allowed,
 that is an edit to `deny-paths` — which is itself on the deny list, so

@@ -104,6 +104,13 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
     made `watermark` the live word. Check 5 finds these; check 4 will not,
     because the live term is present elsewhere and the count looks fine.
 
+14. **An affordance is built but never surfaced.** The inverse of 1, and
+    check 1 shows it as a command with `plan:1` and `docs:0`. `mesthiri
+    whoami` diagnoses exactly the credential mix-up most likely to break a
+    first install, while the guide's troubleshooting section had nothing
+    about credentials at all. A command users would want and never hear
+    about is as much a defect as one promised and never built.
+
 ## Report and record
 
 Report only what a command established, most severe first: contradictions

@@ -40,6 +40,10 @@ symlink and would overwrite everything here.
   `794f0da` had to correct the record. Chain the edit and the commit with
   `&&`, or read `git diff` before writing the message. Separate lines are
   the natural way to type it, which is exactly why this needs saying.
+  A script making several edits must validate *all* of them before writing
+  *any* — assert first, write second. Interleaving them leaves the earlier
+  edits applied and the later ones not, so a retry re-asserts against text
+  it already changed and fails for a second, unrelated-looking reason.
 - Library code under `lib/mesthiri/*.sld`, entry point `mesthiri.scm`,
   tests under `tests/` runnable as
   `kaappi --lib-path ./lib tests/test-<module>.scm`.
