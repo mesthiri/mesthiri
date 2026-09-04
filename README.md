@@ -41,11 +41,13 @@ capability in production today, look at fullsend first.
 | **Code** | label or command | Drive a coding agent to a tested implementation, then push and open the PR from outside the sandbox |
 | **Review** | PR events | Multi-dimensional review: correctness, security, performance, intent alignment |
 | **Fix** | review findings | Apply findings, push, re-run tests until clean |
-| **Retro** | schedule | Analyze completed runs, file process-improvement proposals |
+| **Retro** | schedule | Analyze completed runs, file process-improvement proposals as issues on the same repo |
 
-Every stage can also be run on demand with a slash command (`/triage`,
-`/implement`, `/review`, `/fix`, `/retro`) by someone whose permission on the
-repo covers it.
+Five of the six can also be run on demand by slash command — `/triage`,
+`/implement`, `/review`, `/fix`, `/retro` — by someone whose own permission
+on the repo covers it, and only where their inputs exist: `/implement` on an
+issue, `/fix` on a pull request. Prioritize is scheduled only; it ranks a
+backlog, which is not a thing you ask for one of.
 
 ## Architecture (one paragraph)
 
@@ -76,11 +78,16 @@ them, and every run has a token/turn budget and a kill-the-tree timeout.
 
 1. **Humans gate merges.** The pipeline's output is a reviewed PR, not a
    deploy.
-2. **Independent validation.** The project's own CI, not the agent's
-   self-assessment, is the evidence a change is good.
+2. **Independent validation.** The agent runs your test command while it
+   works, but the evidence a change is good is your CI running on the pull
+   request afterwards — not the agent's own account of how it went.
 3. **Untrusted inputs.** Issue and PR text is data, never instructions to
    the orchestrator.
-4. **Budgets everywhere.** Per-run and per-night caps on agent spend.
+4. **Budgets, honestly.** A run's token, turn and wall-clock caps are
+   exact, because the run enforces them on itself. Caps *across* runs are
+   derived from recent run history and are approximate — enough to stop a
+   runaway, not to bill against. That is the price of keeping no
+   database.
 5. **Bring your own agent.** The coding agent is a subprocess speaking a
    small protocol; pi is the first backend, not the only possible one.
 6. **No new infrastructure.** Your CI is already the event receiver, the

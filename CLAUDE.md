@@ -23,9 +23,11 @@ saying so until it does.
 - Library code under `lib/mesthiri/*.sld`, entry point `mesthiri.scm`,
   tests under `tests/` runnable as
   `kaappi --lib-path ./lib tests/test-<module>.scm`.
-- All subprocess access (agent, git, openssl) goes through one module —
-  `lib/mesthiri/agent.sld` / `lib/mesthiri/proc.sld` — never inline, so a
-  second agent backend is a new module, not a change to stage code. Built
+- All subprocess access goes through two modules and never inline:
+  `lib/mesthiri/proc.sld` wraps `(kaappi process)`, and
+  `lib/mesthiri/agent.sld` is the only caller allowed to spawn the coding
+  agent. A second agent backend is then a new module, not a change to stage
+  code. Built
   on `(kaappi process)` (KEP-0022, shipped in kaappi v0.26.0; requires
   kaappi ≥ 0.26): `spawn-process` for the long-lived agent, `run-process`
   for one-shot git and openssl calls. No `gh` — `forge.sld` is the only
@@ -36,8 +38,22 @@ saying so until it does.
 - Shim workflows use `pull_request_target` and never check out the PR's
   code. This is the control that stops a pull request rewriting the
   workflow that holds the secrets — treat it as non-negotiable.
+- **Configuration is interpreted, never `eval`ed.** A target repo's
+  `.mesthiri/config.scm` is s-expressions read with `read`, and its trigger
+  predicates run through a small interpreter over a fixed vocabulary. Do not
+  reach for `eval` because the data is already s-expressions and it would be
+  one line — that one line turns a config file into arbitrary code
+  execution. As load-bearing as the `pull_request_target` rule above.
+- Two files are easy to confuse: `lib/mesthiri/config.sld` is mesthiri's
+  reader module; `.mesthiri/config.scm` is the config file in the *target*
+  repository that it reads.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
+- After editing `docs/architecture.md`, re-render every Mermaid block before
+  committing — a broken diagram fails silently on GitHub and looks like a
+  missing section. `npm i mermaid jsdom` in a scratch directory and call
+  `mermaid.parse` plus `mermaid.render` on each fenced block; parse alone
+  misses `classDef` errors.
 
 ## Related work
 
