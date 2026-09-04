@@ -22,6 +22,7 @@
           config-agent-version config-provider-names config-provider
           provider-endpoint provider-secret provider-key-env provider-api
           config-command-permission config-stage stage-mode stage-trigger
+          config-priority-order
           stage-max-tier config-budget
           config-error? config-error-message)
   (begin
@@ -127,6 +128,12 @@
       (let ((cs (form-args (config-forms c) 'commands)))
         (and cs (let ((e (form-ref cs command)))
                   (and e (form-arg1 (cdr e) 'min-permission))))))
+
+    ;; The repository's own priority ordering, if it declares one. Absent
+    ;; means rank by age: mesthiri does not invent an ordering for a project
+    ;; that has not stated one.
+    (define (config-priority-order c)
+      (form-args (config-forms c) 'priorities))
 
     (define (config-stage c name)
       (let ((ss (form-args (config-forms c) 'stages)))

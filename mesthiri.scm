@@ -11,7 +11,7 @@
         (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
         (mesthiri version) (mesthiri agent) (mesthiri sandbox)
         (mesthiri harness) (mesthiri triage) (mesthiri labels)
-        (mesthiri sweep))
+        (mesthiri sweep) (mesthiri prioritize))
 
 ;; Adapt kaappi-http's response record to the transport contract forge wants.
 (define (http-transport method url headers body)
@@ -237,6 +237,12 @@
         ;; validated by triage against its schema.
         (json-read-string (agent-final-text rec))))))
 
+(define (prioritize-handler forge config event)
+  (let* ((repo (event-repo event))
+         (mode (stage-mode (config-stage config 'prioritize)))
+         (promoted (prioritize! forge config repo mode)))
+    (log-info "prioritize " mode ": " (length promoted) " issue(s) promoted")))
+
 (define (triage-handler forge config event)
   (let* ((repo (event-repo event))
          (st (config-stage config 'triage))
@@ -257,7 +263,8 @@
   (let ((ev (load-event)))
     (log-context! "dispatch" (event-repo ev) (env "MESTHIRI_RUN_URL"))
     (let-values (((forge cfg) (authed-forge 'reader)))
-      (let* ((handlers (list (cons 'triage triage-handler)))
+      (let* ((handlers (list (cons 'triage triage-handler)
+                             (cons 'prioritize prioritize-handler)))
              (d (dispatch forge cfg ev handlers (make-already-handled? forge))))
         (log-info "outcome=" (decision-outcome d)
                   " stage=" (or (decision-stage d) "-")

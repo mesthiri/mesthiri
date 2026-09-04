@@ -291,11 +291,11 @@ pull request against 2000-plus commits of someone's main project. Run it on
 
 ## M5 — Prioritize
 
-- [ ] Rank triaged issues into the ready queue — the repository's own
+- [x] Rank triaged issues into the ready queue — the repository's own
       rubric ranking first, oldest-triaged-first where it has none, age
       breaking ties — on the scheduled (UTC) run, moving labels rather
       than rows. The per-day cap counts runs started.
-- [ ] Ranking is explainable: the scheduled run leaves a comment on each
+- [x] Ranking is explainable: the scheduled run leaves a comment on each
       issue it promotes saying what moved it, so a maintainer can disagree
       with the ranking rather than only with the outcome.
 
