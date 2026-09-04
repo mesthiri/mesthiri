@@ -17,7 +17,7 @@ name for something that already has one; `docs/guide.md` is the end-user
 experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
-was wrong; `README.md` is the public face. Keep all five in sync with
+was wrong; `README.md` is the public face. Keep all six in sync with
 reality — this repo has no code yet, and the README and the guide must both
 keep saying so until it does.
 
