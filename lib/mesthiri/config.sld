@@ -20,7 +20,7 @@
           config-version config-operator config-operator-name config-operator-email
           config-app config-rubric config-deny-paths config-agent-backend
           config-agent-version config-provider-names config-provider
-          provider-endpoint provider-secret provider-key-env
+          provider-endpoint provider-secret provider-key-env provider-api
           config-command-permission config-stage stage-mode stage-trigger
           stage-max-tier config-budget
           config-error? config-error-message)
@@ -115,6 +115,11 @@
     (define (provider-endpoint p) (form-arg1 p 'endpoint))
     (define (provider-secret p)   (form-arg1 p 'secret))
     (define (provider-key-env p)  (form-arg1 p 'key-env))
+    ;; Which wire protocol the endpoint speaks. Defaults to
+    ;; openai-completions, which is what most providers offer; a provider
+    ;; speaking Anthropic's Messages API declares (api "anthropic-messages").
+    (define (provider-api p)
+      (let ((a (form-arg1 p 'api))) (and a (if (symbol? a) (symbol->string a) a))))
 
     ;; A command with no entry has no default: an unlisted command is not
     ;; runnable rather than runnable by anyone.
