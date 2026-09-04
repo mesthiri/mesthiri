@@ -51,7 +51,7 @@ jobs:
 
       - name: Install the pinned mesthiri release
         env:
-          MESTHIRI_VERSION: v0.1.10
+          MESTHIRI_VERSION: v0.1.11
         run: |
           set -euo pipefail
           base="https://github.com/mesthiri/mesthiri/releases/download/${MESTHIRI_VERSION}"
