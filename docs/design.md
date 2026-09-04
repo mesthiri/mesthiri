@@ -26,8 +26,12 @@ humans set intent, define guardrails, and review outcomes. It is:
   plane, because it already is all three for your tests;
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
   (`kaappi-http`, `kaappi-json`, `kaappi-cli`, `kaappi-log`), and compiled
-  compiled to a standalone binary so a target repository needs a binary, not
-  a Kaappi installation. The build is two steps rather than the obvious one:
+  compiled to a binary plus two shared objects, so a target repository needs
+  three files rather than a Kaappi installation. The binary embeds mesthiri's
+  Scheme bytecode; kaappi's HTTP and TLS support is a C library the runtime
+  `dlopen`s, so it cannot be embedded and travels alongside. v0.1.0 shipped
+  the binary alone and failed at startup with `ffi-open: libkaappi_net`,
+  which is why this says three files rather than "standalone". The build is two steps rather than the obvious one:
   `kaappi --compile` with explicit `--lib-path`s, then `zig build -Dbundle=`
   to embed the bytecode. `-Dbundle-src=` cannot be used, because it compiles
   with no library path and mesthiri's own modules do not resolve. Releases ship Linux x86_64 and arm64 for CI plus

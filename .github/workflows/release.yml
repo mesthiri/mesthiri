@@ -35,12 +35,15 @@ jobs:
         include:
           - runner: ubuntu-latest
             artifact: mesthiri-x86_64-linux
+            platform: x86_64-linux
             ext: so
           - runner: ubuntu-24.04-arm
             artifact: mesthiri-aarch64-linux
+            platform: aarch64-linux
             ext: so
           - runner: macos-latest
             artifact: mesthiri-aarch64-macos
+            platform: aarch64-macos
             ext: dylib
     runs-on: ${{ matrix.runner }}
     steps:
@@ -78,6 +81,10 @@ jobs:
           for r in kaappi-net kaappi-http; do
             make -C "../$r"
             cp "../$r/lib${r//-/_}.${{ matrix.ext }}" ~/.kaappi/lib/
+            # Shipped with the release: the bundle embeds Scheme bytecode, but
+            # these are dlopen'd at runtime, so the binary alone is not enough.
+            cp "../$r/lib${r//-/_}.${{ matrix.ext }}" \
+               "$RUNNER_TEMP/lib${r//-/_}-${{ matrix.platform }}.${{ matrix.ext }}"
           done
           ls -la ~/.kaappi/lib/
 
@@ -139,7 +146,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ runner.temp }}/${{ matrix.artifact }}
+          path: |
+            ${{ runner.temp }}/${{ matrix.artifact }}
+            ${{ runner.temp }}/libkaappi_*-${{ matrix.platform }}.${{ matrix.ext }}
           if-no-files-found: error
 
   publish:
@@ -163,7 +172,7 @@ jobs:
           set -euo pipefail
           cd dist
           chmod +x mesthiri-*
-          sha256sum mesthiri-* > SHA256SUMS
+          sha256sum mesthiri-* libkaappi_* > SHA256SUMS
           sha256sum -c SHA256SUMS
           cat SHA256SUMS
 

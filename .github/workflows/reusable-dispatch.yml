@@ -29,17 +29,35 @@ jobs:
 
       - name: Install the pinned mesthiri release
         env:
-          MESTHIRI_VERSION: v0.1.0
+          MESTHIRI_VERSION: v0.1.1
         run: |
           set -euo pipefail
           base="https://github.com/mesthiri/mesthiri/releases/download/${MESTHIRI_VERSION}"
-          curl -fsSL -o mesthiri "${base}/mesthiri-x86_64-linux"
+          plat=x86_64-linux
+
+          # Three files, not one. The binary embeds mesthiri's Scheme
+          # bytecode, but kaappi's HTTP and TLS support is a C library the
+          # runtime dlopen()s — so the binary alone starts and then fails with
+          # `ffi-open: libkaappi_net: cannot open shared object file`. v0.1.0
+          # shipped exactly that.
+          curl -fsSL -o mesthiri "${base}/mesthiri-${plat}"
+          curl -fsSL -o "libkaappi_net.so"  "${base}/libkaappi_net-${plat}.so"
+          curl -fsSL -o "libkaappi_http.so" "${base}/libkaappi_http-${plat}.so"
           curl -fsSL -o SHA256SUMS "${base}/SHA256SUMS"
-          # Verify before making it executable, let alone running it. Every
-          # installed repo fetches this binary from a repository they do not
-          # control; the checksum is what bounds that trust.
-          grep " mesthiri-x86_64-linux\$" SHA256SUMS | sed 's/ .*/  mesthiri/' > expected.sha256
+
+          # Verify all three before anything is made executable or loaded.
+          # Every installed repo fetches these from a repository they do not
+          # control; the checksums are what bound that trust.
+          {
+            grep " mesthiri-${plat}\$"          SHA256SUMS | sed 's/ .*/  mesthiri/'
+            grep " libkaappi_net-${plat}.so\$"  SHA256SUMS | sed 's/ .*/  libkaappi_net.so/'
+            grep " libkaappi_http-${plat}.so\$" SHA256SUMS | sed 's/ .*/  libkaappi_http.so/'
+          } > expected.sha256
           sha256sum -c expected.sha256
+
+          # The loader looks here and nowhere useful otherwise.
+          mkdir -p ~/.kaappi/lib
+          mv libkaappi_net.so libkaappi_http.so ~/.kaappi/lib/
           chmod +x mesthiri
 
       - name: Dispatch

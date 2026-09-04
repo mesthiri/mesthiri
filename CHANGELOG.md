@@ -9,6 +9,18 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-04
+
+### Fixed
+
+- **v0.1.0 did not run.** The binary embeds mesthiri's Scheme bytecode, but
+  kaappi's HTTP and TLS support is a C library loaded at runtime, so v0.1.0
+  started and immediately failed with
+  `ffi-open: libkaappi_net: cannot open shared object file`. Releases now
+  ship `libkaappi_net` and `libkaappi_http` alongside the binary, all three
+  covered by `SHA256SUMS`, and the reusable workflow installs them where the
+  loader looks. If you pinned v0.1.0, move to this one — v0.1.0 cannot work.
+
 ## [0.1.0] — 2026-09-04
 
 First release. The plumbing and the dispatch path, with no stage behind them
