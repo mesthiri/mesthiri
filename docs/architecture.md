@@ -28,7 +28,7 @@ flowchart LR
     tok["installation token<br/>short-lived"]
     subgraph sbx["namespace sandbox, unprivileged uid"]
       direction TB
-      agent["pi --rpc"]
+      agent["pi --mode rpc"]
       clone["scratch clone<br/>only writable mount"]
     end
     bin --> tok

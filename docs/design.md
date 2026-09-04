@@ -32,7 +32,7 @@ humans set intent, define guardrails, and review outcomes. It is:
   agent, which is precisely why those two can run on a laptop where there
   is no sandbox to spawn one into;
 - **agent-agnostic**: the coding agent is a subprocess speaking JSON over
-  stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`); the
+  stdio. The first backend is [pi](https://pi.dev/) (`pi --mode rpc`); the
   interface is small enough that other headless agents can slot in.
 
 ### Why not a long-lived service

@@ -72,8 +72,8 @@ workflow that downloads one checksummed Kaappi-compiled binary and runs
 `mesthiri dispatch`: normalize the event, authorize it against the actor's
 own permission — the commenter's for a command, the labeler's for a label —
 match it to exactly one stage, run that stage in
-that job. The coding agent — [pi](https://pi.dev/) first, via its `--rpc`
-JSON-over-stdio mode — runs inside a namespace sandbox within the job, with
+that job. The coding agent — [pi](https://pi.dev/) first, via its
+`--mode rpc` JSON-over-stdio mode — runs inside a namespace sandbox within the job, with
 the scratch clone as its only writable path. State lives in the repository:
 workflow state in labels a human can read and change, those same labels
 acting as the watermark for scheduled sweeps, and run history in your CI's

@@ -1,0 +1,15 @@
+{"type":"extension_ui_request","id":"e33258f0-5d72-4c27-83ac-43ba1a8bffce","method":"setWidget","widgetKey":"subagent-async"}
+{"type":"response","command":"prompt","success":true}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"Reply with exactly: OK"}],"timestamp":1788496755901}}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"Reply with exactly: OK"}],"timestamp":1788496755901}}
+{"type":"message_start","message":{"role":"assistant","content":[],"api":"openai-codex-responses","provider":"openai-codex","model":"gpt-5.5","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"pending","timestamp":1788496755908}}
+{"type":"message_update","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"OK"}}
+{"type":"message_update","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"assistantMessageEvent":{"type":"text_end","contentIndex":0,"content":"OK"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"OK","textSignature":"{\"v\":1,\"id\":\"msg_0f68d32b17dd9d64016a9a4b76ee3c87d09c969b6a0eac3a40\",\"phase\":\"final_answer\"}"}],"api":"openai-codex-responses","provider":"openai-codex","model":"gpt-5.5","usage":{"input":417,"output":5,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":422,"cost":{"input":0.002085,"output":0.00015000000000000001,"cacheRead":0,"cacheWrite":0,"total":0.002235}},"stopReason":"stop","timestamp":1788496755908,"responseId":"resp_0f68d32b17dd9d64016a9a4b758b5487d095f97f470a4b7408","rawStopReason":"completed"}}
+{"type":"turn_end","message":{"role":"assistant","content":"<redacted>","api":"openai-codex-responses","provider":"openai-codex","model":"gpt-5.5","usage":{"input":417,"output":5,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":422,"cost":{"input":0.002085,"output":0.00015000000000000001,"cacheRead":0,"cacheWrite":0,"total":0.002235}},"stopReason":"stop","timestamp":1788496755908,"responseId":"resp_0f68d32b17dd9d64016a9a4b758b5487d095f97f470a4b7408","rawStopReason":"completed"},"toolResults":[]}
+{"type":"agent_end","messages":["<redacted>","<redacted>"],"willRetry":false}
+{"type":"agent_settled"}
+{"type":"extension_ui_request","id":"bc87a0c4-9415-4b29-8ef0-360ad7c1276f","method":"setWidget","widgetKey":"subagent-async"}

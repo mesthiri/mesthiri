@@ -42,10 +42,15 @@ promptly and there is still nothing listening on a port.
       the `.dylib`, and the failure is `ffi-open: dlopen … relative path not
       allowed`, which reads like a path bug rather than a missing install.
       `thottam install` is the flow. Verified absent on the dev machine.
-- [ ] **pi recon** (blocks M3): install pi, pin the version, capture its
-      real `--rpc` frame schema into `docs/pi-rpc.md` plus a fixture. Note
-      what it needs from filesystem and network — M3's sandbox policy comes
-      from that list.
+- [x] **pi recon** (unblocks M3): done against pi 0.84.4 —
+      `docs/pi-rpc.md` records the protocol and
+      `tests/fixtures/pi-rpc-session.jsonl` is a real 15-frame session. It
+      found that the flag is `--mode rpc` and not `--rpc`, which four
+      documents had wrong; that there is no in-band cancel, so the deadline
+      must be a group kill; that `agent_settled` rather than `agent_end` is
+      terminal; and that pi reads `AGENTS.md`/`CLAUDE.md` from the working
+      directory by default, which in a target's scratch clone is a
+      prompt-injection path — so `--no-context-files` is not optional.
 - [ ] Sandbox target: `mesthiri/sandbox`, a small disposable repo with its
       own test command and seeded issues. First used by M2's demo and the
       code stage's in M6. Its shim workflow is committed **by hand** until
@@ -170,7 +175,8 @@ instead, and M4 replaces the handler rather than deleting a special case.
 ## M3 — Agent execution and containment
 
 - [ ] `lib/mesthiri/agent.sld` — the only module that spawns the agent.
-      `spawn-process '("pi" "--rpc") …`, `'pipe` stdin/stdout, `'null`
+      `spawn-process '("pi" "--mode" "rpc" "--no-session"
+      "--no-context-files") …`, `'pipe` stdin/stdout, `'null`
       stderr, `new-group: #t`; JSON framing from a drive fiber against M0's
       captured schema; wall-clock deadline via `process-wait 'timeout:` then
       `process-kill 'group: #t`; token and turn budgets passed to pi.

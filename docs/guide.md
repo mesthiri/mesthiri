@@ -226,7 +226,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
   (apps (reader 123456) (writer 123457))
 
   ;; Which agent program mesthiri drives. Not the model — see below.
-  (agent (backend pi) (version "0.9.2"))
+  (agent (backend pi) (version "0.84.4"))
 
   ;; Where models come from. The sandbox's network allowlist is derived
   ;; from `endpoint`, so there is nothing to keep in sync by hand.
@@ -354,7 +354,7 @@ With `(mode dry-run)`, triage comments its reasoning and changes nothing:
 > **Intent tier 1** — a single issue is sufficient authorization to fix
 > this.
 >
-> <sub>Rubric `docs/dev/github-issues.md` at `8c697da` · pi 0.9.2 ·
+> <sub>Rubric `docs/dev/github-issues.md` at `8c697da` · pi 0.84.4 ·
 > 38k tokens · [run](https://github.com/owner/repo/actions/runs/1)</sub>
 
 Leave it in dry-run for a week or two. Read the rationales rather than the
@@ -424,7 +424,7 @@ Closes #412
 
 Signed-off-by: Your Name <you@example.org>
 Co-authored-by: mesthiri[bot] <...@users.noreply.github.com>
-Generated-by: mesthiri 0.1.0; agent pi 0.9.2;
+Generated-by: mesthiri 0.1.0; agent pi 0.84.4;
              model main/claude-opus-5; run .../actions/runs/1
 ```
 
