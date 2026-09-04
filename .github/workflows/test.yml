@@ -92,15 +92,19 @@ jobs:
           EOF
           export MESTHIRI_EVENT_NAME=issue_comment MESTHIRI_EVENT_PATH=$PWD/event.json
           export MESTHIRI_REPO=mesthiri/sandbox CI=true
-          echo "=== A: explain-event (no forge, no keys) ==="
-          ./m explain-event 2>&1 | tail -20; echo "exit=${PIPESTATUS[0]}"
-          echo "=== B: dispatch, no keys ==="
-          ./m dispatch > b.out 2> b.err; echo "exit=$?"; echo "--stdout"; cat b.out; echo "--stderr"; cat b.err
-          echo "=== C: dispatch with dummy keys ==="
-          MESTHIRI_READER_KEY=x MESTHIRI_WRITER_KEY=y MESTHIRI_MODEL_KEY=z \
-            ./m dispatch > c.out 2> c.err; echo "exit=$?"; echo "--stdout"; cat c.out; echo "--stderr"; cat c.err
-          echo "=== D: ulimit -c and dmesg ==="
-          ulimit -c unlimited; ./m dispatch; echo "exit=$?"
+
+          echo "=== 1. the SCRIPT, same config, same event ==="
+          kaappi --lib-path ../lib --lib-path ../../kaappi-json/lib ../mesthiri.scm explain-event
+          echo "script-exit=$?"
+
+          echo "=== 2. the BUNDLE ==="
+          ./m explain-event; echo "bundle-exit=$?"
+
+          echo "=== 3. bundle with NO config present ==="
+          mv .mesthiri away; ./m explain-event; echo "no-config-exit=$?"; mv away .mesthiri
+
+          echo "=== 4. bundle, config present, no event file ==="
+          MESTHIRI_EVENT_PATH=/nonexistent ./m explain-event; echo "no-event-exit=$?"
         continue-on-error: true
 
       - run: ./tests/run-all.sh
