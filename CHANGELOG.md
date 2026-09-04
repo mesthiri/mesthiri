@@ -9,6 +9,45 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.14] — 2026-09-04
+
+### Fixed
+
+- **A failed agent run is reported instead of silently killing the job.**
+  `agent-runner` called `die`, which calls `exit`, which no `guard` can
+  catch — so the handlers written to report an agent failure were dead code.
+  Two consequences seen live: an `/implement` whose model never settled left
+  a red workflow and nothing on the issue; and a review whose *refutation*
+  pass went over budget died mid-run, posting none of its four dimensions
+  even though the first had already found something. It now raises, so the
+  per-dimension guard in review does what it says and continues, and the
+  code stage reports the reason on the issue before failing the job.
+
+- **Every comment mesthiri posts carries its marker.** `triage.sld` and
+  `prioritize.sld` posted through `forge-post` with hand-rolled bodies and
+  no marker. The shim skips a run when a comment body contains the marker,
+  so each unmarked comment cost a full runner job — and those jobs join the
+  per-issue concurrency group, where GitHub keeps only one *pending* run.
+  On the sandbox an unmarked triage comment evicted a queued `/implement`,
+  discarding a human's command with no comment and no failure.
+  `cancel-in-progress: false` does not protect against this: it protects the
+  running job, not the queued one. `event-own-comment?` matches the same
+  marker, so mesthiri's own second line of defence was blind too.
+
+- **The scaffolded review stage fires on newly opened pull requests.**
+  `(pull-request-updated)` matches only `synchronize`, so review woke on the
+  second push and never on the first — in the starter config every adopter
+  gets.
+
+- **The `fix` stage is wired up** (see 0.1.13) and now refuses a foreign
+  pull request out loud.
+
+### Added
+
+- **`forge-post-comment`** is the one way to post a comment, and `marker` is
+  a required argument: omitting it is a wrong-arity error at the call site
+  rather than silence three systems away.
+
 ## [0.1.13] — 2026-09-04
 
 ### Fixed
