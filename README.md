@@ -28,7 +28,7 @@ the code, and that needs the agent underneath it.
 |---|---|---|
 | **Triage** | cron | Classify incoming issues, verify their claims, apply priority labels per the project's rubric |
 | **Prioritize** | cron | Score and rank the ready backlog |
-| **Code** | queue | Pick up a ready issue, drive a coding agent to an implementation PR with tests, following repo conventions |
+| **Code** | queue | Pick up a ready issue, drive a coding agent to a tested implementation, then push and open the PR from outside the sandbox |
 | **Review** | PR event | Multi-dimensional review: correctness, security, performance, intent alignment |
 | **Fix** | review findings | Apply findings, push, re-run tests until clean |
 | **Retro** | cron | Analyze completed workflows, file process-improvement proposals |
@@ -50,10 +50,11 @@ through its REST API, authenticated as a GitHub App you register and install
 on your own repos; stages are woken by cron, by the queue, or by a slash
 command from someone with the repo permission to issue it. Every event is
 found by polling — mesthiri makes outbound requests and nothing listens, so
-the server it runs on needs no hostname, no TLS, and no open inbound port. Guardrails are
-structural: the App has no merge permission, the agent cannot reach the
-credentials that drive it, its output is schema-checked outside itself, a
-path denylist and intent tier decide what it may attempt at all, commits are
+the server it runs on needs no hostname, no TLS, and no open inbound port.
+Guardrails are structural: the App has no merge permission, the agent holds
+no credential and has no route to the forge — the service reads its diff and
+does the pushing — its output is schema-checked outside itself, a path
+denylist and intent tier decide what it may attempt at all, commits are
 signed off, and every run has a token/turn budget and a kill-the-tree
 timeout.
 

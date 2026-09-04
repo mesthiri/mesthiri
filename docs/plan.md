@@ -10,8 +10,9 @@ in design.md first.
 Ground rules for the whole plan: Kaappi ≥ 0.26 (`(kaappi process)` is
 assumed everywhere, KEP-0022 Final), every stage lands with tests runnable
 via `kaappi --lib-path ./lib tests/test-<module>.scm`, exactly one agent run
-is in flight at a time process-wide, no agent runs outside its sandbox, and
-each milestone ends in something *demonstrable*, not a pile of modules.
+is in flight at a time process-wide, targets are served round-robin, no
+agent runs outside its sandbox and none of them holds a credential, and each
+milestone ends in something *demonstrable*, not a pile of modules.
 
 ## M0 — Project setup and recon
 
@@ -72,7 +73,9 @@ nothing outside this repo to wait on.
 - [ ] `lib/mesthiri/config.sld` — one config file (targets and their rubric
       paths, App id / key path, poll intervals per event class, budgets,
       cadences, pinned pi version, per-target **path denylist**, command
-      permission thresholds, sandbox egress allowlist); `kaappi-cli` for the entry-point
+      permission thresholds, sandbox egress allowlist); several targets
+      are polled each cycle and served round-robin from the start, so
+      fairness never has to be retrofitted into a queue that assumed one; `kaappi-cli` for the entry-point
       flags. Startup validation rejects a triage target with no rubric path,
       and refuses to start if a denylist is missing where the code stage is
       enabled.
@@ -103,7 +106,8 @@ triage is written once, correctly.
       it, so no stage can produce an uncontained run: read-only root, the
       scratch clone as the only writable mount, the secrets directory
       outside the mount namespace, egress denied by default with an
-      allowlist from config, separate unprivileged uid. macOS runs
+      allowlist from config that **excludes the forge** — the agent neither
+      pushes nor calls the API — separate unprivileged uid. macOS runs
       uncontained and warns loudly at startup; Linux is the deployment
       target.
 - [ ] **Output validation** — every agent response validated against a
@@ -146,9 +150,11 @@ triage does not need it to be useful.
 - [ ] Live mode: apply label + post rationale comment as `mesthiri[bot]`.
 - [ ] Red-team fixture in the test suite from day one: an issue whose body
       tries to instruct the agent, asserted to change no verdict.
-- [ ] Scheduling: reactor timer loop inside the service *and* a
-      `mesthiri triage --once` entry point so a systemd timer or cron can
-      drive it externally; pick one as default at deploy time.
+- [ ] Scheduling: the reactor timer loop inside the service, which is now
+      the only option rather than one of two — polling means the service is
+      long-lived by construction, so an external systemd timer would have
+      nothing to drive. `mesthiri triage --once` survives as a manual and
+      debugging entry point, not as a deployment mode.
 
 **Demo:** nightly dry-run against kaappi/kaappi producing verdicts that the
 org owner spot-checks; graduation to live labels is a config flip.
@@ -197,13 +203,21 @@ explaining why; an illegal label transition is rejected rather than written.
       without explicit human authorization, and refuse to open a PR whose
       diff touches a denylisted path. Both refusals are comments explaining
       which rule fired, not silence.
-- [ ] Queue claim from the store; fresh clone per issue under a scratch
-      root; `run-process` for git/gh (never a shell).
+- [ ] Round-robin queue claim from the store; fresh clone per issue under
+      a scratch root; `run-process` for git (never a shell, and no `gh` —
+      everything that talks to the API goes through `forge.sld`, so there
+      is one credential path and one place that knows about rate limits).
 - [ ] Drive the agent to an implementation with tests; run the *target
       project's own* test command; iterate within budget.
-- [ ] PR: branch push as the App installation, commits `-s` +
-      `Co-authored-by`, PR body links the issue and the pipeline run; one
-      issue, one PR; **never merge**.
+- [ ] **The service pushes, not the agent.** The agent writes commits in
+      its clone and exits; the service reads the finished diff outside the
+      sandbox, runs the denylist check against it, and only then pushes the
+      branch and opens the PR through `forge.sld`. The agent has no
+      credential and no route to the forge, so this is the only way a
+      change can reach GitHub at all — the eligibility check sits on the
+      path rather than beside it.
+- [ ] PR mechanics: commits `-s` + `Co-authored-by`, PR body links the
+      issue and the pipeline run; one issue, one PR; **never merge**.
 - [ ] Failure honesty: a run that can't reach green tests files its state
       as a comment on the issue, not a broken PR.
 
@@ -235,15 +249,18 @@ comment; a third is tier 2 and waits for a human.
 - [ ] Prioritize: rank triaged issues into the ready queue (target's own
       rubric first, RICE fallback), on a cron cadence.
 - [ ] Retro: mine pipeline runs for timings/iteration/failure patterns;
-      file improvement proposals as issues on mesthiri itself.
+      file improvement proposals as issues on mesthiri itself — where a
+      human picks them up. mesthiri is never a target of its own pipeline
+      (design.md, Non-goals), so the App is not installed on this repo and
+      startup refuses a config that lists it.
 
 ## M8 — Deployment hardening
 
 - [ ] Single binary via `zig build -Dbundle-src=mesthiri.scm`; systemd
       unit + timer files under `deploy/`.
-- [ ] Server provisioning notes (a small DO droplet suffices); `openssl`,
-      `git` and `gh` on `PATH`; `bwrap` present and unprivileged user
-      namespaces enabled; the agent's
+- [ ] Server provisioning notes (a small DO droplet suffices); `openssl`
+      and `git` on `PATH` (no `gh` — `forge.sld` is the only API path);
+      `bwrap` present and unprivileged user namespaces enabled; the agent's
       unprivileged uid; **no inbound ports** — the droplet needs no
       hostname, no TLS termination and no reverse proxy, and its firewall
       can deny inbound entirely; secrets layout (App private key on disk,
@@ -307,10 +324,16 @@ comment; a third is tier 2 and waits for a human.
   steady trickle of outbound reads. An installation gets 5000 requests an
   hour and conditional requests that return `304` do not count, so the
   budget is comfortable — but it is finite, and it is shared with every
-  API call the stages make. Poll intervals live in config, the store keeps
-  `ETag`s so unchanged polls stay free, and `mesthiri status` reports
-  remaining limit before a new target is added rather than after it
-  starves an existing one.
+  API call the stages make, across every target in the rotation. Poll
+  intervals live in config, the store keeps `ETag`s so unchanged polls stay
+  free, and `mesthiri status` reports remaining limit before a new target is
+  added rather than after it starves an existing one.
+- **DCO sign-off has no settled author**: mesthiri's commits carry
+  `Signed-off-by`, and a sign-off is a person certifying a contribution's
+  origin — something `mesthiri[bot]` cannot do. design.md's open question
+  lists the candidates; it must be answered before M5 opens a PR against a
+  repo that enforces DCO, which the sandbox target will if it mirrors org
+  practice.
 - **Rubric drift**: mesthiri consumes target-repo rubrics; a rubric change
   upstream silently changes behavior — the triage verdict records the
   rubric file's commit hash.

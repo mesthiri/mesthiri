@@ -37,6 +37,12 @@ simplification: it makes budget accounting, scratch-directory isolation, and
 forge rate-limit behaviour trivially correct. A worker pool is a later
 change, justified by real timings from the retro stage.
 
+Serial does not mean single-target. Several repos are polled each cycle and
+served **round-robin**, so a busy repo cannot starve a quiet one — fairness
+is in the queue from the beginning rather than retrofitted into one that
+assumed a single target. Rate limit and nightly budget are shared across
+targets and accounted per target.
+
 1. **Triage** (cron): poll open issues since the last cursor; for each,
    verify the issue's claims against the code before trusting them
    (diagnosis in an issue is a hypothesis, not a fact); propose exactly one
@@ -46,7 +52,12 @@ change, justified by real timings from the retro stage.
    (RICE-style scoring where the project has no rubric of its own).
 3. **Code** (queue-driven): claim a ready issue; clone into a scratch
    worktree; drive the agent to a tested implementation; run the *project's
-   own* test command; open a PR with sign-off. One issue, one PR.
+   own* test command. The agent writes commits in its clone and stops
+   there — **the service pushes**, because the agent holds no credential
+   and has no network path to the forge (see *Agent containment*). Between
+   the two sits the eligibility check: the service reads the finished diff,
+   refuses it if it touches a denied path, and only then pushes the branch
+   and opens the PR. One issue, one PR.
 4. **Review** (PR events, discovered by polling): dimensions — correctness,
    security, performance, intent alignment — each an independent agent pass;
    findings verified adversarially before posting (a finding that cannot
@@ -54,7 +65,9 @@ change, justified by real timings from the retro stage.
 5. **Fix** (review findings): apply findings, push, re-run tests; iterate
    to a bounded depth, then hand to a human.
 6. **Retro** (cron): mine completed pipeline records (timings, iteration
-   counts, failure classes) and file improvement proposals as issues.
+   counts, failure classes) and file improvement proposals as issues on
+   mesthiri — where a human picks them up, since mesthiri is not a target
+   of its own pipeline (see *Non-goals*).
 
 ## Triggers and the command surface
 
@@ -99,7 +112,7 @@ installation is scoped to selected repositories.
 - **How the signature is made**: RS256 does not exist in the Kaappi
   ecosystem, and mesthiri does not add it. The signing input goes over
   stdin to a one-shot `openssl dgst -sha256 -sign` through the same
-  `run-process` path that already drives `git` and `gh` — the key is passed
+  `run-process` path that already drives `git` — the key is passed
   as a file path, never on argv, and never leaves the host. Base64url is
   about twenty-five lines of Scheme, since kaappi core does not export
   base64 either. That is the whole of it: no `kaappi-crypto` dependency, no
@@ -181,7 +194,7 @@ not the *only* thing standing between an issue and a change.
 
 ## Process supervision
 
-The agent, git, and gh are all subprocesses, supervised through
+The agent and git are both subprocesses, supervised through
 `(kaappi process)` (KEP-0022, **shipped in kaappi v0.26.0** — the KEP is
 Final; mesthiri requires kaappi ≥ 0.26). Every requirement mesthiri stated
 is met by what shipped:
@@ -199,7 +212,7 @@ is met by what shipped:
 
 Two shipped details stage code should assume: long-lived agent runs use
 `spawn-process` (drive stdin/stdout from fibers, `process-wait` with a
-deadline, group-kill on expiry); one-shot tool calls (`git`, `gh`) use
+deadline, group-kill on expiry); one-shot tool calls (`git`, `openssl`) use
 `run-process`, whose `timeout:` implies `new-group: #t` and kills with
 SIGKILL, and whose stdin defaults to `'null` unless `input:` is given.
 
@@ -227,10 +240,18 @@ cannot spawn an unsandboxed agent even by mistake:
   the host filesystem the agent can see at all;
 - the secrets directory (App private key, cached tokens) outside the mount
   namespace entirely — unreachable rather than merely unreadable;
-- network egress restricted to what the run needs (the forge API, the
-  target's package registries, the model endpoint), denied by default;
+- network egress restricted to what the run needs (the target's package
+  registries, the model endpoint), denied by default — **the forge is not
+  on that list**: the agent neither pushes nor calls the API, because it
+  has no credential to do either with;
 - a separate unprivileged uid, so a namespace escape still lands somewhere
   that owns nothing.
+
+This is why the code stage splits in two. The agent writes commits into
+its clone and exits; the service, outside the sandbox, reads the resulting
+diff, applies the eligibility rules to it, and does the pushing. A
+compromised agent can therefore produce a bad diff — which is what review
+is for — but it cannot deliver one anywhere by itself.
 
 Blast radius is then what the sandbox permits, which is the point. The
 sandbox is a Linux-only mechanism; on a developer's macOS machine mesthiri
@@ -291,12 +312,27 @@ label.
   to *your* repos; it is not a product listing.)
 - Replacing the target project's CI, review culture, or triage rubric —
   mesthiri *consumes* those; it does not define them.
+- **Working on itself.** Retro files improvement proposals as issues on
+  mesthiri, and a human implements them. mesthiri is never configured as a
+  target of its own pipeline: an orchestrator that can modify the code
+  deciding what it is allowed to do has no guardrail left that it cannot
+  reach. The denylist protects targets from mesthiri; this protects
+  mesthiri from itself, and a rule is easier to keep than a denylist is to
+  get exhaustively right.
 
 ## Open questions
 
 - The agent-backend protocol boundary: pi's RPC schema as-is, or a thin
   mesthiri-defined envelope so backends are swappable without touching
   stage code.
+- **Who signs off.** Every commit carries a DCO `Signed-off-by`, and the
+  kaappi org enforces it. A sign-off is a person certifying the origin of a
+  contribution, which `mesthiri[bot]` cannot meaningfully do. Candidates:
+  sign off in the operator's name (they configured the instance and are
+  accountable for it), sign off as the bot and let the human reviewer's
+  merge be the certification, or require a human to add their own sign-off
+  before a mesthiri PR is mergeable. This needs settling before the first
+  PR to a repo that enforces DCO — which is M5's demo.
 - Forge abstraction: GitHub first; GitLab/Forgejo later via the same
   REST-client module or a forge protocol. (GitHub App identity is a GitHub
   concept; the credential-provider seam is where a second forge's auth
