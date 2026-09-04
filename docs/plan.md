@@ -98,6 +98,10 @@ The heart of the re-architecture. Until this works, nothing else can.
       string inside an issue body that must not execute.
 - [ ] Idempotency: a handler checks whether it already acted on this event
       id before acting; a CI concurrency group collapses rapid edits.
+- [ ] `mesthiri explain-event` — print the normalized event and which
+      trigger predicates were tested and how they matched. "A stage did
+      nothing and said nothing" is the failure mode this architecture makes
+      easiest to hit, and it is unhelpful without this.
 
 **Demo:** `/ping` from an authorized account on `mesthiri/sandbox` gets a
 reply comment; from an unauthorized account, a refusal. End to end, in CI,
@@ -146,16 +150,23 @@ cannot reach a host off the allowlist.
       target repo at its configured path, propose exactly one `priority:`
       label and an intent tier, comment the rationale, record the rubric's
       commit SHA in the verdict.
-- [ ] `--dry-run` prints proposed labels and rationales without writing.
-      The mode CI exercises and the mode a new target runs in for a while.
+- [ ] `(mode dry-run)` on a stage prints what it would do and writes
+      nothing. A per-stage setting rather than a triage flag, because the
+      adoption ladder in design.md needs it on the code stage later too.
 - [ ] Red-team fixture from day one: an issue whose body tries to instruct
       the agent, asserted to change no verdict.
 - [ ] The scheduled sweep, finding its work by **querying the forge for
       labels and update times** rather than keeping a cursor. Labels are the
       watermark; mesthiri stores nothing a human cannot see in the repo.
 
+- [ ] `mesthiri try <owner/repo>` — run triage locally against a PAT and
+      print verdicts, writing nothing at all. The on-ramp the guide leads
+      with: installation asks for two Apps and a pull request, and this
+      lets someone judge the verdicts before paying any of that.
+
 **Demo:** scheduled dry-run triage on kaappi/kaappi that the org owner
-spot-checks; going live is a config change.
+spot-checks; going live is a config change. Separately, `mesthiri try`
+against any public repo with a rubric, from a laptop, with no install.
 
 Note the shape of that ask has changed. When mesthiri was a service it could
 be pointed at kaappi/kaappi from outside; per-repo installation means the
@@ -244,6 +255,11 @@ stage that spent its budget without reaching green.
       Layered distribution means a fix here reaches installed repos without
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.
+- [ ] `mesthiri apps create` — print pre-filled GitHub App manifest URLs
+      for the reader and writer Apps so registration is a confirm rather
+      than a form. Secrets are still pasted by hand: GitHub's secrets API
+      needs NaCl sealed-box encryption, and a crypto dependency is too much
+      to carry for a once-per-repo step (design.md records this).
 - [ ] A preset for the kaappi org so its repos install with one command.
 - [ ] `mesthiri install` refuses mesthiri's own repository.
 

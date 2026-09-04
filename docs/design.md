@@ -168,12 +168,18 @@ can.
 
 mesthiri authenticates as GitHub Apps that the operator registers and
 installs. Permissions are split by role, following fullsend's ADR 0007:
-a **reader** App for triage and review, which cannot write code, and a
-**writer** App for code and fix. Compromising the reviewer's credential
+a **reader** App for triage, prioritize, review and retro — which comments
+and moves labels but cannot write code — and a **writer** App for code and
+fix. Compromising the reviewer's credential
 then grants nothing the reviewer did not already have.
 
-The App private key is a repository or organization secret; the workflow
-mints a short-lived installation token per run. Minting needs an RS256 JWT,
+The App private key is a repository or organization secret, and mesthiri
+does **not** set it for you. GitHub's secrets API requires NaCl sealed-box
+encryption, which would pull a cryptography dependency into a binary whose
+only other asymmetric need is one JWT signature; for a step taken once per
+repository, `install` prints instructions and you paste the key. Recorded
+here so it reads as a decision rather than an omission. The workflow mints a
+short-lived installation token per run. Minting needs an RS256 JWT,
 which the Kaappi ecosystem does not provide, so `jwt.sld` signs with a
 one-shot `openssl dgst -sha256 -sign` through `run-process`: signing input
 on stdin, key as a file path, never on argv. There is deliberately no
@@ -204,6 +210,18 @@ declared schema outside the agent, with capped retries and then hard
 failure. No unvalidated or merely plausibly-shaped output reaches stage
 code. fullsend enforces this at the harness level (their ADR 0022) for the
 same reason.
+
+## Autonomy is earned
+
+Adoption is a ladder, and each rung is boring for a while before the next
+one. `mesthiri try` reads a repository and writes nothing. Triage in
+`dry-run` comments its reasoning and applies no labels. Triage `live`
+applies them. The code stage opens pull requests for tier 0 work, then
+tier 1. Review and fix follow.
+
+Stages therefore carry a `mode` — `dry-run` or `live` — rather than triage
+alone, and the tier ceiling is configuration. There is no rung on which
+mesthiri merges, and tier 2 waits for a human at every rung.
 
 ## Eligibility: what mesthiri may attempt
 

@@ -32,6 +32,11 @@ independent implementation in Kaappi Scheme rather than a port: no fullsend
 code, schema or prose is copied, and mesthiri stays MIT. If you want this
 capability in production today, look at fullsend first.
 
+[docs/guide.md](docs/guide.md) shows the intended end-user experience —
+install, configure, first triage, what a mesthiri pull request looks like.
+It is written ahead of the code, so treat it as a design preview rather
+than instructions.
+
 ## The pipeline
 
 | Stage | Trigger | What it does |
