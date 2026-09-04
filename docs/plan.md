@@ -59,7 +59,9 @@ promptly and there is still nothing listening on a port.
 
 ## M1 — The binary: config, event, forge
 
-Everything here runs locally against fixtures. Nothing touches CI yet.
+Everything here runs locally against fixtures and nothing touches CI yet.
+The modules can be built and tested immediately; only the demo waits on M0's
+App registration, since minting a real token is the whole point of it.
 
 - [ ] `lib/mesthiri/config.sld` — reads `.mesthiri/config.scm` with
       `read`: rubric path, budgets, path denylist, command permissions,
