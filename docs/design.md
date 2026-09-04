@@ -1,7 +1,8 @@
 # mesthiri — design
 
 Status: draft, 2026-08-29 (revised 2026-09-04: GitHub App identity, serial
-execution, rubric location). Distilled from the research and design discussion
+execution, rubric location; then agent containment, command surface,
+eligibility policy, output validation). Distilled from the research and design discussion
 that produced [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md);
 this document records the decisions so the repo is self-explaining.
 
@@ -54,6 +55,31 @@ change, justified by real timings from the retro stage.
 6. **Retro** (cron): mine completed pipeline records (timings, iteration
    counts, failure classes) and file improvement proposals as issues.
 
+## Triggers and the command surface
+
+Stages are reached three ways, and all three arrive as the same
+**normalized event** so routing logic lives in one place:
+
+- **cron** — reactor timers for triage, prioritize, retro;
+- **queue** — the code stage draining ready work;
+- **commands** — a human typing `/triage`, `/implement`, `/review`, `/fix`
+  or `/retro` in an issue or PR comment.
+
+Commands are parsed **deterministically** — a plain grammar, never a model —
+so an issue body cannot talk the parser into a command it did not contain.
+Every command is authorized against the **commenter's** permission on the
+target repository, fetched from the forge, not against mesthiri's own: a
+mutating command (`/implement`, `/fix`) requires write or better, a
+read-only one (`/triage`, `/review`) requires triage or better, and an
+unauthorized command is answered with a refusal comment rather than
+silence. Commands are further restricted to the entity where their inputs
+exist — `/implement` on an issue, `/fix` on a PR — and de-duplicated by
+comment id so a re-delivered event cannot run a stage twice.
+
+Event delivery is a **driver** behind the normalized-event interface.
+Polling the forge on a cursor is the first driver, and the webhook receiver
+described below is the second; the stages never learn which one woke them.
+
 ## Forge identity and events
 
 mesthiri authenticates as a **GitHub App** that the operator registers and
@@ -91,6 +117,32 @@ configuration error rather than a silent fallback. Every triage verdict
 records the commit SHA of the rubric it was decided under, so an upstream
 rubric change is visible as a behaviour change instead of a mystery.
 
+## Eligibility: what mesthiri may attempt
+
+Branch protection stops a bad change from *merging*. It says nothing about
+what mesthiri should try in the first place, and an orchestrator that
+attempts anything an issue asks for is one well-written issue away from
+proposing a change to its own guardrails. Two mechanisms decide eligibility
+*before* an agent is spawned:
+
+- **A path denylist**, per target, of files no mesthiri-authored change may
+  touch: auth and policy code, public API surface, deploy and CI
+  definitions, ownership files, and mesthiri's own configuration. Enforced
+  twice — the code stage refuses to open a PR whose diff touches a denied
+  path, and the review stage treats such a diff as an automatic escalation.
+- **An intent tier** on the issue, deciding whether the issue alone is
+  sufficient authorization to act. Tier 0 (pre-authorized, additive,
+  trivially revertible — typos, doc fixes), tier 1 (a single issue
+  suffices — the ordinary bug fix), tier 2 (a human must say so explicitly
+  before the code stage may claim it — features, migrations, anything
+  cross-cutting). Triage assigns a proposed tier; only a human can raise
+  the ceiling. The review stage re-derives the tier independently from the
+  diff, so a change that grew past its authorization is caught by someone
+  other than the agent that wrote it.
+
+Neither mechanism is a substitute for review; both exist so that review is
+not the *only* thing standing between an issue and a change.
+
 ## Process supervision
 
 The agent, git, and gh are all subprocesses, supervised through
@@ -122,12 +174,62 @@ longer needed. The one-module rule survives it for a different reason:
 RPC framing, budget enforcement), so a second agent backend is a new
 module, not a change to stage code.
 
+## Agent containment
+
+Supervision bounds how *long* an agent runs and kills its children when the
+deadline passes. It does not bound what the agent can reach while it runs,
+and mesthiri's threat model demands that it must: the agent is driven by
+attacker-writable issue text, and it runs on the same host as the App
+private key. Tree-kill after the fact is not containment.
+
+So the agent is spawned inside a **sandbox** — Linux namespaces via
+`bwrap`/`unshare`, wrapped by `agent.sld` and by nothing else, so a stage
+cannot spawn an unsandboxed agent even by mistake:
+
+- read-only root filesystem;
+- the run's scratch clone as the only writable mount, and the *only* part of
+  the host filesystem the agent can see at all;
+- the secrets directory (App private key, webhook secret, tokens) outside
+  the mount namespace entirely — unreachable rather than merely
+  unreadable;
+- network egress restricted to what the run needs (the forge API, the
+  target's package registries, the model endpoint), denied by default;
+- a separate unprivileged uid, so a namespace escape still lands somewhere
+  that owns nothing.
+
+Blast radius is then what the sandbox permits, which is the point. The
+sandbox is a Linux-only mechanism; on a developer's macOS machine mesthiri
+runs the agent uncontained and says so loudly at startup, because a
+development convenience that fails silently in production is worse than no
+convenience at all.
+
+## Output validation
+
+Everything an agent returns is validated against a declared schema
+**outside the agent** before any stage code reads it: a triage verdict, a
+review finding, a tier re-derivation. Validation failure is retried a
+capped number of times and then fails the run — no unvalidated,
+partially-parsed, or plausibly-shaped output flows downstream. The agent
+proposes; `agent.sld` decides whether what came back is even the right
+shape to consider.
+
 ## State
 
 SQLite (`kaappi-sqlite`): issues seen, triage verdicts, queue claims,
-pipeline runs (per-stage timings, agent spend, outcomes), webhook delivery
-ids, retro facts. The database is the only state; the service is restartable
-at any point.
+pipeline runs (per-stage timings, agent spend, outcomes), delivery and
+comment ids already handled, retro facts. The database is mesthiri's own
+state, and the service is restartable at any point.
+
+Workflow state, though, lives where humans can see it: **in labels on the
+target repo**. `ready-for-triage`, `ready-to-implement`, `ready-for-review`,
+`ready-for-merge`, `needs-human`, `blocked`. Transitions are guarded — only
+declared moves are legal, the states are mutually exclusive, and a
+transition is written then read back to confirm it took. The rule that
+earns the machine its keep: **a new commit clears every downstream label**,
+so a `ready-for-merge` earned by one head cannot survive the push that
+invalidated it. A human reading the issue can see what mesthiri thinks
+without reading mesthiri's database, and can change it by changing a
+label.
 
 ## Guardrails (structural, not aspirational)
 
@@ -136,6 +238,11 @@ at any point.
 | Humans gate merges | the App has no merge permission; branch protection stays on |
 | Sign-off | every commit made with `git commit -s` (DCO) |
 | Untrusted input | issue/PR text is data; prompts label it as such; no shell ever sees it |
+| Agent containment | agent runs in a namespace sandbox: read-only root, scratch clone the only writable mount, secrets outside the namespace, egress denied by default |
+| Output validation | agent output schema-checked outside the agent; capped retries then hard fail |
+| Command authorization | commands parsed deterministically and authorized against the *commenter's* repo permission |
+| Eligibility | path denylist and intent tier checked before an agent is spawned, not at merge time |
+| Stale approval | any new commit clears downstream workflow labels |
 | Authenticated events | webhook deliveries HMAC-verified and de-duplicated; contents still untrusted |
 | Least privilege | GitHub App installed on selected repos only, minimal declared permissions, short-lived installation tokens |
 | Spend | per-run and per-night budgets enforced by the orchestrator, not the agent |
