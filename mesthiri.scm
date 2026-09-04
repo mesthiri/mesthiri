@@ -533,9 +533,30 @@
          (hn (read-harness ".mesthiri" 'triage))
          (pname (or (harness-provider hn) (car (config-provider-names config))))
          (model (harness-model hn))
-         (workdir (or (env "RUNNER_TEMP") "/tmp"))
-         (trace (string-append workdir "/mesthiri-trace-"
+         ;; Triage is asked to check an issue's claims against the code, so
+         ;; it needs the code. It used to get RUNNER_TEMP — an empty
+         ;; directory — and the first live run shows the agent working that
+         ;; out for itself: "the working directory doesn't have the
+         ;; repository code. Let me look around", then two turns hunting the
+         ;; filesystem before it found the job's checkout. Two of twelve
+         ;; turns, spent on a question mesthiri could have answered.
+         ;;
+         ;; It gets its own clone rather than the job's checkout. The sandbox
+         ;; binds the workdir writable, and the job's checkout is where
+         ;; mesthiri itself reads config.scm and the rubric from — an agent
+         ;; able to edit those mid-run could rewrite the rules it is being
+         ;; judged by.
+         (workdir (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                 "/mesthiri-triage-"
+                                 (number->string (event-number event))))
+         (trace (string-append (or (env "RUNNER_TEMP") "/tmp")
+                               "/mesthiri-trace-"
                                (number->string (event-id event)) ".jsonl")))
+    (proc-run (list "rm" "-rf" workdir))
+    ;; #f clones anonymously, which is right for a public repository and is
+    ;; what the code stage already does with its own token variable.
+    (git-clone (string-append "https://github.com/" repo) workdir
+               (env "MESTHIRI_READER_TOKEN"))
     (let-values (((rubric sha) (fetch-rubric forge repo (config-rubric config))))
       (let ((issue (forge-get forge (string-append "/repos/" repo "/issues/"
                                                    (number->string (event-number event))))))
