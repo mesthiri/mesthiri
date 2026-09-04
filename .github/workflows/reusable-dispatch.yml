@@ -11,6 +11,28 @@ on:
       reader-key: { required: true }
       writer-key: { required: false }
       model-key:  { required: false }
+    inputs:
+      # Shell run in the job before dispatch, for whatever the TARGET
+      # repository's own tests need — its compiler, its interpreter, its
+      # package manager. mesthiri cannot know that: a Scheme library needs a
+      # Scheme, a Rust crate needs cargo, and guessing would be worse than
+      # asking.
+      #
+      # It matters because the code stage's prompt tells the agent to get the
+      # project's test command green before reporting done. Without the
+      # toolchain that rule is unsatisfiable, and a good agent does not
+      # shrug — the first live run spent 35 of its 40 turns hunting for an
+      # interpreter, including running `strings` on the mesthiri binary, and
+      # then failed on budget having written nothing.
+      #
+      # This is the maintainers' own shim on their base branch, so it is
+      # their code and their decision, exactly like `test-command`. It runs
+      # OUTSIDE the sandbox — it has to, since installing a toolchain needs
+      # network and system paths — and therefore before the agent starts.
+      setup:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   dispatch:
@@ -101,6 +123,10 @@ jobs:
           set -euo pipefail
           npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
           pi --version
+
+      - name: Set up the target's toolchain
+        if: inputs.setup != ''
+        run: ${{ inputs.setup }}
 
       - name: Dispatch
         env:

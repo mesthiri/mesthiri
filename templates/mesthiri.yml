@@ -58,6 +58,12 @@ jobs:
     # a repo running an older shim.
     if: ${{ !contains(github.event.comment.body, '<!-- mesthiri:') }}
     uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
+    # Whatever your own tests need in order to run. The code stage asks the
+    # agent to get them green, and it cannot do that with no toolchain.
+    # with:
+    #   setup: |
+    #     curl -fsSL -o /usr/local/bin/yourtool https://…
+    #     chmod +x /usr/local/bin/yourtool
     secrets:
       reader-key: ${{ secrets.MESTHIRI_READER_KEY }}
       writer-key: ${{ secrets.MESTHIRI_WRITER_KEY }}
