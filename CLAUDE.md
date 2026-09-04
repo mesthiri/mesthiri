@@ -75,8 +75,10 @@ symlink and would overwrite everything here.
   those silently, so a fill that never appears is on you to notice.
   The script's comments explain the jsdom setup, which is fiddly in three
   ways that each fail looking like something else. CI runs the same script
-  on any push or pull request touching `docs/`, so this is enforced rather
-  than advisory — running it locally just saves you the round trip.
+  on every push and pull request, so this is enforced rather than advisory —
+  running it locally just saves you the round trip. The workflow is
+  deliberately not path-filtered, so it is safe to mark as a required check;
+  the reason is in a comment at the top of it.
 
 ## Related work
 

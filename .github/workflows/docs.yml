@@ -3,12 +3,18 @@
 # a CI job while the repository still has no code.
 name: docs
 
+# Deliberately unfiltered by path. A path-filtered workflow simply does not
+# run when nothing matches, so as a *required* check it leaves a pull request
+# stuck on a check that will never report. The usual workaround — a second
+# workflow with paths-ignore and the same job name, reporting success — is
+# unsound: `paths` runs if ANY changed file matches while `paths-ignore` skips
+# only if EVERY changed file matches, so a commit touching docs/ and something
+# else fires both, and the requirement can be satisfied by the stub. Running
+# the real check every time costs about a minute and cannot go wrong.
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'scripts/check-diagrams.mjs', '.github/workflows/docs.yml']
   pull_request:
-    paths: ['docs/**', 'scripts/check-diagrams.mjs', '.github/workflows/docs.yml']
 
 # Read-only. This workflow holds no secrets and needs nothing else.
 permissions:
