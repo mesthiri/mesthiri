@@ -36,17 +36,17 @@ needs fixing rather than mesthiri.
 mesthiri try — read-only, nothing will be written
 
 #412  Segfault when parsing empty vectors
-      priority: high     tier 1     confidence: high
+      priority: high     tier 1     rubric §2
       Reproduced against 8c697da. The reporter blames the reader; the
       crash is in vector-ref bounds checking, one frame further in.
 
 #418  Add a --json flag to `kaappi features`
-      priority: low      tier 2     confidence: high
+      priority: low      tier 2     rubric §5
       A feature, not a defect. Tier 2 — needs a human to authorize the
       work before the code stage may claim it.
 
 #421  Docs typo in cookbook/testing.md
-      priority: low      tier 0     confidence: high
+      priority: low      tier 0     rubric §1
       One-word change, additive, trivially revertible.
 
 3 issues read, 3 verdicts, 0 writes. Spent 41k tokens (~2 minutes).
@@ -59,6 +59,9 @@ mesthiri try — read-only, nothing will be written
 - A repository with GitHub Actions enabled.
 - Permission to register GitHub Apps in your account or organization.
 - An API key for whichever model backend you use, as a repository secret.
+  This is the one credential that goes *into* the agent's sandbox, because
+  the agent cannot work without it. It buys model tokens and nothing else —
+  it grants no access to your repository.
 
 ### Register the two Apps
 
@@ -67,7 +70,7 @@ code cannot write it:
 
 | App | Used by | Permissions |
 |---|---|---|
-| `mesthiri-reader` | triage, review, retro | issues and pull requests: write (for comments and labels); contents: **read** |
+| `mesthiri-reader` | triage, prioritize, review, retro | issues and pull requests: write (for comments and labels); contents: **read** |
 | `mesthiri-writer` | code, fix | contents: write; pull requests: write |
 
 Neither gets merge permission. That is not a setting you can turn on later
@@ -122,6 +125,30 @@ no labels until you change one line. Nothing else runs at all until you
 enable it.
 ```
 
+### About the `pull_request_target` in that workflow
+
+If you read the workflow carefully you will see `pull_request_target`, and
+if you know GitHub Actions security you will pause at it. Good — that
+trigger is genuinely dangerous when it is used carelessly, and it is worth
+knowing why it is here.
+
+A workflow triggered by the ordinary `pull_request` event runs the copy of
+itself *from the pull request's branch*. Any secret it can see is therefore
+readable by anyone who opens a pull request, simply by editing the workflow
+in their own branch. `pull_request_target` runs the base branch's copy
+instead, which is the version you reviewed.
+
+The danger with `pull_request_target` is the other half: because it holds
+real secrets, checking out and running the pull request's code under it
+hands those secrets to the contributor's code. mesthiri's shim therefore
+**never checks out the pull request's code** — it passes the event through
+and stops. The pull request's code is only ever fetched later, inside the
+sandbox, by an agent that holds no repository credential at all.
+
+Both halves matter, and neither is optional. If you ever find yourself
+editing the shim to add a checkout step, that is the mistake this paragraph
+exists to prevent.
+
 ## Configuring
 
 `.mesthiri/config.scm` lives in your repository, so it is reviewed like
@@ -156,7 +183,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
             (implement (min-permission write))
             (review    (min-permission triage))
             (fix       (min-permission write))
-            (retro     (min-permission write)))
+            (retro     (min-permission triage)))
 
   (stages
     (triage     (on (or (issue-opened) (issue-reopened) (schedule "07:00")))
@@ -209,7 +236,7 @@ comment, by someone whose own permission on the repository covers it:
 | `/implement` | issue | write |
 | `/review` | pull request | triage |
 | `/fix` | pull request | write |
-| `/retro` | either | write |
+| `/retro` | either | triage |
 
 Commands are matched by a plain grammar, never by a model, so a command
 written inside an issue *body* is text and not an instruction. Prioritize

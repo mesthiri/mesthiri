@@ -197,6 +197,16 @@ as the only writable mount, the token and key file outside the mount
 namespace entirely, network egress denied by default with an allowlist that
 **excludes the forge**, and a separate unprivileged uid.
 
+**One credential does go in.** The agent needs its model backend's API key
+to work at all, so that key — and only that key — is passed into the
+sandbox as an environment variable. It is worth being explicit that this is
+not an exception being smuggled past the rule: the model key buys tokens
+from a model provider and grants nothing on the repository, so an agent that
+leaks it costs money rather than code. The App keys and the installation
+token, which do grant repository access, stay outside the mount namespace
+where the agent cannot reach them at all. If a second credential ever seems
+to belong inside, that is the moment to re-read this paragraph.
+
 **The agent writes; the job pushes.** The agent produces commits in its
 clone and exits. The job, outside the sandbox, reads the finished diff,
 checks it against the eligibility rules, and only then pushes and opens the
@@ -242,9 +252,12 @@ should be attempted. Two checks run before an agent is spawned:
 
 `/triage`, `/implement`, `/review`, `/fix`, `/retro` in an issue or PR
 comment. Parsed by a plain grammar, never by a model. Authorized against
-**the commenter's** permission on the repository — write or better to
-mutate, triage or better for read-only — and restricted to the entity where
-their inputs exist, so `/implement` is an issue command and `/fix` is a PR
+**the commenter's** permission on the repository, by one rule: a command
+that can **change code** needs write or better (`/implement`, `/fix`); a
+command that only produces **commentary** — comments, labels, issues —
+needs triage or better (`/triage`, `/review`, `/retro`). Spend is not the
+test, since every one of them costs tokens. Commands are also restricted to
+the entity where their inputs exist, so `/implement` is an issue command and `/fix` is a PR
 command (fullsend's ADR 0076 reaches the same split). An unauthorized
 command gets a refusal comment, not silence.
 
