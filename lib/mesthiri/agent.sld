@@ -85,11 +85,14 @@
       (let ((t (frame-type f))) (and (string? t) (string=? t "agent_settled"))))
 
     ;; message_update carries a complete cumulative usage object, so a budget
-    ;; check reads the latest rather than summing.
+    ;; check reads the latest rather than summing. An empty usage object
+    ;; ({} — kaappi-json reads it as json-empty-object, not a list) or a
+    ;; missing totalTokens yields #f, like any other unusable usage.
     (define (frame-usage f)
       (let ((u (assoc "usage" f)))
-        (and u (let ((tt (assoc "totalTokens" (cdr u))))
-                 (and tt (cdr tt))))))
+        (and u (pair? (cdr u))
+             (let ((tt (assoc "totalTokens" (cdr u))))
+               (and tt (cdr tt))))))
 
     (define-record-type <run-record>
       (make-run-record outcome turns tokens model frames text)
@@ -262,28 +265,34 @@
       (message output-error-message))
 
     ;; schema is ((key . type) ...) with type in (string number boolean list).
+    ;;
+    ;; kaappi-json reads {} as the distinct json-empty-object value,
+    ;; which is not a list, so normalise it to the empty alist before
+    ;; the shape checks; a schema with required keys then fails on it
+    ;; the same way any object missing those keys would.
     (define (validate-output value schema)
-      (cond
-       ((not (list? value))
-        (raise (make-output-error "agent output is not an object")))
-       (else
-        (let loop ((s schema))
-          (cond
-           ((null? s) value)
-           (else
-            (let* ((key (caar s))
-                   (want (cdar s))
-                   (hit (assoc key value)))
-              (cond
-               ((not hit)
-                (raise (make-output-error
-                        (string-append "agent output is missing required key `"
-                                       key "`"))))
-               ((not (type-ok? (cdr hit) want))
-                (raise (make-output-error
-                        (string-append "agent output key `" key "` should be "
-                                       (symbol->string want)))))
-               (else (loop (cdr s))))))))))) 
+      (let ((value (if (json-empty-object? value) '() value)))
+        (cond
+         ((not (list? value))
+          (raise (make-output-error "agent output is not an object")))
+         (else
+          (let loop ((s schema))
+            (cond
+             ((null? s) value)
+             (else
+              (let* ((key (caar s))
+                     (want (cdar s))
+                     (hit (assoc key value)))
+                (cond
+                 ((not hit)
+                  (raise (make-output-error
+                          (string-append "agent output is missing required key `"
+                                         key "`"))))
+                 ((not (type-ok? (cdr hit) want))
+                  (raise (make-output-error
+                          (string-append "agent output key `" key "` should be "
+                                         (symbol->string want)))))
+                 (else (loop (cdr s)))))))))))) 
 
     (define (type-ok? v want)
       (case want

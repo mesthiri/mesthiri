@@ -81,6 +81,18 @@
 (check "an absent key is not a zero cap"
        'settled (run-record-outcome (fold-frames frames '((turns . 99)))))
 
+;; "usage": {} — kaappi-json reads the empty object as the distinct
+;; json-empty-object value, not a list, so frame-usage must yield #f
+;; rather than die in assoc.
+(check "frame-usage reads totalTokens" 120
+  (frame-usage (list (cons "type" "message_update")
+                     (cons "usage" '(("totalTokens" . 120))))))
+(check "frame-usage on an empty usage object" #f
+  (frame-usage (list (cons "type" "message_update")
+                     (cons "usage" (json-read-string "{}")))))
+(check "frame-usage without usage" #f
+  (frame-usage '(("type" . "message_update"))))
+
 ;; Unknown frame types must be ignored, not error: a pi upgrade that adds a
 ;; frame would otherwise break every run.
 (check "an unknown frame type is ignored"
@@ -122,6 +134,15 @@
 ;; Extra keys are fine: a backend adding a field must not break a stage.
 (check "extra keys are allowed"
        #t (list? (validate-output (cons '("extra" . 1) good) schema)))
+
+;; kaappi-json reads {} as the distinct json-empty-object value, which
+;; is not a list; an empty object is a valid empty output, not "not an
+;; object", and a schema with required keys must still refuse it.
+(check "an empty object is valid output"
+       '() (validate-output (json-read-string "{}") '()))
+(check "an empty object refuses a schema with required keys"
+       #t (guard (e ((output-error? e) #t))
+            (validate-output (json-read-string "{}") schema) #f))
 
 ;; --- the trace ------------------------------------------------------------
 (write-trace "/tmp/mesthiri-trace-test.jsonl" (list (car frames) (cadr frames)))
