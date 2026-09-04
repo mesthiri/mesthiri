@@ -2,59 +2,88 @@
 <meta charset="utf-8">
 <title>Register mesthiri's GitHub Apps</title>
 <style>
- body{font:15px/1.6 system-ui;margin:2rem auto;max-width:44rem;padding:0 1rem}
- button{font:inherit;padding:.6rem 1rem;cursor:pointer;border-radius:6px;
-        border:1px solid #888;background:#f6f6f6}
- code{background:#f0f0f0;padding:.1em .3em;border-radius:3px}
- .warn{background:#fff8e1;border-left:4px solid #b8860b;padding:.6rem 1rem;margin:1rem 0}
- table{border-collapse:collapse;margin:.5rem 0}td,th{border:1px solid #ddd;padding:.3rem .6rem;text-align:left}
+ body{font:15px/1.65 system-ui;margin:2rem auto;max-width:46rem;padding:0 1rem;color:#222}
+ button{font:inherit;padding:.65rem 1.1rem;cursor:pointer;border-radius:6px;
+        border:1px solid #666;background:#f4f4f4}
+ code{background:#f0f0f0;padding:.1em .35em;border-radius:3px;font-size:.92em}
+ .warn{background:#fff8e1;border-left:4px solid #b8860b;padding:.7rem 1rem;margin:1.2rem 0}
+ .note{background:#eef4ff;border-left:4px solid #4472c4;padding:.7rem 1rem;margin:1.2rem 0}
+ table{border-collapse:collapse;margin:.6rem 0}
+ td,th{border:1px solid #ddd;padding:.35rem .7rem;text-align:left}
+ h2{margin-top:2rem}
+ ol li{margin:.4rem 0}
 </style>
+
 <h1>Register mesthiri's two GitHub Apps</h1>
+
 <p>Two Apps, so the stages that only read code cannot write it. Each button
 opens GitHub's App creation page with the name and permissions already filled
-in — you review and confirm. GitHub shows the private key <b>once</b>: save it
-before leaving that page.</p>
+in — you review and confirm.</p>
+
+<div class="note">
+<b>Neither App has a webhook.</b> mesthiri receives events through the
+workflow in your repository, not through the App, so there is nothing to
+deliver to. The manifests set the hook inactive and subscribe to no events —
+an App that listens to nothing has no inbound surface.
+</div>
 
 <div class="warn">
 <b>On "no merge permission".</b> GitHub has no separate merge permission to
-withhold — merging a pull request is authorised by <code>contents: write</code>,
-which the writer App needs in order to push a branch at all. So the writer
-App <i>could</i> merge, and mesthiri's guarantee that it never does rests on
-two things instead: branch protection on the target repository, and mesthiri
-having no code path that calls the merge endpoint. Keep branch protection on.
+withhold — merging is authorised by <code>contents: write</code>, which the
+writer App needs to push a branch at all. So the writer App <i>could</i>
+merge. mesthiri's guarantee that it never does rests on having no code path
+that calls the merge endpoint, and on your branch protection. Keep branch
+protection on: it is the control that actually enforces this.
 </div>
 
 <h2>1. mesthiri-reader</h2>
-<table><tr><th>Permission</th><th>Level</th></tr>
-<tr><td>Issues</td><td>write — comments and labels</td></tr>
-<tr><td>Pull requests</td><td>write — review comments</td></tr>
-<tr><td>Contents</td><td><b>read</b> — cannot write code</td></tr>
-<tr><td>Metadata</td><td>read</td></tr></table>
+<p>Used by triage, prioritize, review and retro.</p>
+<table><tr><th>Permission</th><th>Level</th><th>Why</th></tr>
+<tr><td>Issues</td><td>write</td><td>comments and labels</td></tr>
+<tr><td>Pull requests</td><td>write</td><td>review comments</td></tr>
+<tr><td>Contents</td><td><b>read</b></td><td>read code and the rubric — cannot write</td></tr>
+<tr><td>Metadata</td><td>read</td><td>mandatory</td></tr></table>
 <form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
-  <input type="hidden" name="manifest" value='{"name": "mesthiri-reader", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.", "public": false, "default_permissions": {"issues": "write", "pull_requests": "write", "contents": "read", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request", "pull_request_review"]}'>
+  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-reader&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;issues&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;contents&quot;: &quot;read&quot;, &quot;metadata&quot;: &quot;read&quot;}}">
   <button type="submit">Create mesthiri-reader</button>
 </form>
 
 <h2>2. mesthiri-writer</h2>
-<table><tr><th>Permission</th><th>Level</th></tr>
-<tr><td>Contents</td><td>write — branches and commits</td></tr>
-<tr><td>Pull requests</td><td>write — open the PR</td></tr>
-<tr><td>Issues</td><td>write — state comments</td></tr>
-<tr><td>Metadata</td><td>read</td></tr></table>
+<p>Used by the code and fix stages.</p>
+<table><tr><th>Permission</th><th>Level</th><th>Why</th></tr>
+<tr><td>Contents</td><td>write</td><td>push a branch and commits</td></tr>
+<tr><td>Pull requests</td><td>write</td><td>open the pull request</td></tr>
+<tr><td>Issues</td><td>write</td><td>state comments on the issue</td></tr>
+<tr><td>Metadata</td><td>read</td><td>mandatory</td></tr></table>
 <form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
-  <input type="hidden" name="manifest" value='{"name": "mesthiri-writer", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: code and fix. Pushes branches and opens pull requests.", "public": false, "default_permissions": {"contents": "write", "pull_requests": "write", "issues": "write", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request"]}'>
+  <input type="hidden" name="manifest" value="{&quot;name&quot;: &quot;mesthiri-writer&quot;, &quot;url&quot;: &quot;https://github.com/mesthiri/mesthiri&quot;, &quot;description&quot;: &quot;mesthiri: code and fix. Pushes branches and opens pull requests.&quot;, &quot;public&quot;: false, &quot;hook_attributes&quot;: {&quot;url&quot;: &quot;https://example.invalid/unused&quot;, &quot;active&quot;: false}, &quot;default_permissions&quot;: {&quot;contents&quot;: &quot;write&quot;, &quot;pull_requests&quot;: &quot;write&quot;, &quot;issues&quot;: &quot;write&quot;, &quot;metadata&quot;: &quot;read&quot;}}">
   <button type="submit">Create mesthiri-writer</button>
 </form>
 
-<h2>Afterwards</h2>
+<h2>After creating each App</h2>
 <ol>
-<li>Note each App's <b>App ID</b> and put them in the target repo's
-    <code>.mesthiri/config.scm</code> as
-    <code>(apps (reader ID) (writer ID))</code>. These are not secrets.</li>
-<li>Install both Apps on <code>mesthiri/sandbox</code> only, to start.
-    An App's installation set is its blast radius.</li>
-<li>Add the private keys as repository secrets
-    <code>MESTHIRI_{"name": "mesthiri-reader", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.", "public": false, "default_permissions": {"issues": "write", "pull_requests": "write", "contents": "read", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request", "pull_request_review"]}_KEY</code> and <code>MESTHIRI_{"name": "mesthiri-writer", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: code and fix. Pushes branches and opens pull requests.", "public": false, "default_permissions": {"contents": "write", "pull_requests": "write", "issues": "write", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request"]}_KEY</code>,
-    then delete the downloaded <code>.pem</code> files.</li>
-<li>Verify with <code>mesthiri whoami --app reader --key key.pem</code>.</li>
+<li>You land on the App's settings page. Note its <b>App ID</b> — it is not a
+    secret and goes in the config file.</li>
+<li>Scroll to <b>Private keys</b> and click <b>Generate a private key</b>. A
+    <code>.pem</code> downloads. GitHub will not show it again; generate a new
+    one if you lose it.</li>
+<li>Under <b>Install App</b>, install it on <b>mesthiri/sandbox only</b> for
+    now. An App's installation set is its blast radius: keys live in a repo's
+    secrets, and anyone with write access to that repo can extract them.</li>
+</ol>
+
+<h2>Then wire it up</h2>
+<ol>
+<li>In <code>mesthiri/sandbox</code>, edit <code>.mesthiri/config.scm</code> and
+    replace the placeholder ids:<br>
+    <code>(apps (reader READER_ID) (writer WRITER_ID))</code></li>
+<li>Add the two keys as repository secrets on <code>mesthiri/sandbox</code>:
+    <code>MESTHIRI_READER_KEY</code> and <code>MESTHIRI_WRITER_KEY</code>,
+    pasting the whole <code>.pem</code> including the BEGIN and END lines.</li>
+<li>Delete the downloaded <code>.pem</code> files.</li>
+<li>Verify — this is what M1's <code>whoami</code> exists for:<br>
+    <code>mesthiri whoami --app reader --key reader.pem --config .mesthiri/config.scm</code><br>
+    It should print the installation, its permissions and the rate limit. A
+    mismatched id and key is the likeliest mistake here, and this is what
+    names it.</li>
 </ol>
