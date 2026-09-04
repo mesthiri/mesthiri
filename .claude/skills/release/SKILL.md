@@ -108,21 +108,41 @@ Check two things before going on, because the failure is quiet:
 - **size** — a correct bundle is ~126 KB. A bundle around 14 KB means an
   import silently did not resolve and only the entry point got compiled.
 
-Then, in a kaappi checkout, once per target:
+### You cannot cross-compile a bundle
+
+**Each target's `.sbc` must be compiled by a kaappi built for that same
+target.** Kaappi stamps bytecode with
+`compilerHashFor(version, build_id, target)` and refuses a mismatch at
+startup, so a `.sbc` produced on macOS will not run inside a Linux binary
+however it was cross-built. Verified: the error prints only the build id, so
+it reads as `build id 14bce502; this binary is 14bce502` — identical, and
+still refused, because the target differs and is not shown.
+
+So the three artifacts must each be produced on their own platform. That is
+what the release matrix in CI is for; doing it by hand needs a machine per
+target.
+
+| Target | Built on | Needed by |
+|---|---|---|
+| `x86_64-linux` | ubuntu runner | CI runners — the one every installed repo downloads |
+| `aarch64-linux` | ubuntu-arm runner | ARM runners |
+| `aarch64-macos` | macos runner | local `try` and `install` |
+
+### And keep the compiler out of the way
+
+`zig build -Dbundle=` writes to `zig-out/bin/kaappi`, **overwriting the plain
+kaappi you just used as the compiler.** Copy it aside first:
 
 ```bash
 cd ../kaappi
-zig build -Dbundle=/tmp/mesthiri.sbc -Dtarget=x86_64-linux -Doptimize=ReleaseSafe
-cp zig-out/bin/kaappi /tmp/rel/mesthiri-x86_64-linux
+zig build -Doptimize=ReleaseSafe
+cp zig-out/bin/kaappi /tmp/kaappi-plain      # the compiler
+# ...compile the .sbc with /tmp/kaappi-plain, then:
+zig build -Dbundle=/tmp/mesthiri.sbc -Doptimize=ReleaseSafe
 ```
 
-Targets, and why each exists:
-
-| Target | Needed by |
-|---|---|
-| `x86_64-linux` | CI runners — the one every installed repo downloads |
-| `aarch64-linux` | ARM runners |
-| `aarch64-macos` | local `try` and `install` on a developer machine |
+Skip the copy and the second compile runs *mesthiri* and prints its usage,
+which looks like a broken build rather than the wrong binary.
 
 ## Step 5 — Checksums
 
@@ -139,7 +159,13 @@ locally before publishing:
 shasum -a 256 -c SHA256SUMS
 ```
 
-## Step 6 — Smoke-test the artifact you are about to publish
+## Step 6 — Smoke-test every artifact, on its own platform
+
+Not just the one you can run locally. The argv handling differs between
+running as a script and running as a bundled binary — `command-line` includes
+the script path in the first case and omits the program name entirely in the
+second — and that was a live bug found here, by this step, after every
+earlier check had run the script.
 
 ```bash
 /tmp/rel/mesthiri-aarch64-macos --version     # must print X.Y.Z, not 0.1.0-dev

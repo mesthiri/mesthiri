@@ -241,7 +241,23 @@
   (display "      its permissions and the remaining rate limit.\n")
   (exit 1))
 
-(let ((args (cdr (command-line))))
+;; `command-line` differs between the two ways mesthiri runs. As a script,
+;; `kaappi mesthiri.scm dispatch` gives ("mesthiri.scm" "dispatch"). Bundled
+;; into a standalone binary it gives ("dispatch") — the program name is not
+;; there at all, so a blind `cdr` drops the subcommand, and with no arguments
+;; it crashes on the empty list. Both were live bugs until a release smoke
+;; test ran the binary; every earlier check had run the script.
+(define (invocation-args)
+  (let ((cl (command-line)))
+    (cond ((null? cl) '())
+          ((script-path? (car cl)) (cdr cl))
+          (else cl))))
+
+(define (script-path? s)
+  (let ((n (string-length s)))
+    (and (> n 4) (string=? (substring s (- n 4) n) ".scm"))))
+
+(let ((args (invocation-args)))
   (cond ((null? args) (usage))
         ((or (string=? (car args) "--version") (string=? (car args) "version"))
          (display mesthiri-version) (newline))
