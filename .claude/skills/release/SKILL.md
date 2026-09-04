@@ -234,16 +234,34 @@ uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
 ```
 
 They resolve `@v0` and **never see `main`**, so editing anything on `main`
-rolls out nothing. The rollout is moving that tag:
+rolls out nothing. Bumping `MESTHIRI_VERSION` and pushing is *half* the
+rollout; the other half is moving the tag, and until it moves nothing has
+changed for anyone. That is easy to forget precisely because the push
+succeeded and the release verified — v0.1.13 was published, checksum-checked
+and pin-bumped, and the sandbox still logged `outcome=no-handler`, which
+reads as a code bug rather than a rollout that never happened.
+
+**Point `v0` at the pin-bump commit on `main`, not at `vX.Y.Z`:**
 
 ```bash
-git tag -f v0 vX.Y.Z
+git push origin main                      # the pin bump from above
+git tag -f v0 "$(git rev-parse main)"
 git push -f origin v0
+git ls-remote --tags origin | grep 'refs/tags/v0$'    # confirm it moved
 ```
 
-That moves the workflow *and* the `MESTHIRI_VERSION` pin inside it together,
-which is the point: an installed repository gets a matched pair rather than a
-new workflow fetching an old binary.
+The distinction is load-bearing and used to be written the other way round
+here. `vX.Y.Z` is tagged in Step 7, *before* the pin bump — so the workflow
+at that tag still names the **previous** binary. Pointing `v0` at `vX.Y.Z`
+therefore ships the new workflow fetching the old release: exactly the
+mismatched pair this step exists to prevent. Check it rather than trusting
+the order:
+
+```bash
+git show v0:.github/workflows/reusable-dispatch.yml | grep MESTHIRI_VERSION
+```
+
+It must print the version you just published.
 
 **Rolling back is moving `v0` back to the previous release**, not deleting
 anything. Say so, because the instinct under pressure is to delete the bad
@@ -251,8 +269,11 @@ release — which breaks the checksum fetch for anyone mid-run and leaves `v0`
 pointing at a workflow whose download 404s.
 
 ```bash
-git tag -f v0 vPREVIOUS && git push -f origin v0
+git tag -f v0 <previous rollout commit> && git push -f origin v0
 ```
+
+Same rule as above: the previous *rollout commit*, not the previous release
+tag.
 
 A force-push to a tag is the one place this project does that, and it is
 deliberate: the major tag is a pointer, not history.
