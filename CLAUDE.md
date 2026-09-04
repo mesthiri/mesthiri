@@ -73,6 +73,12 @@ symlink and would overwrite everything here.
 - Two files are easy to confuse: `lib/mesthiri/config.sld` is mesthiri's
   reader module; `.mesthiri/config.scm` is the config file in the *target*
   repository that it reads.
+- **A sample in a document that a reader would copy must be parsed by a
+  test**, not read. `.mesthiri/config.scm` samples go through
+  `parse-config` and their triggers through `trigger-valid?` — a predicate
+  outside the vocabulary parses as an ordinary list and is refused only at
+  run time, so reading the document cannot catch it
+  (`tests/test-guide-config.scm`).
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
 - After editing a doc with Mermaid blocks, validate them before committing —

@@ -111,6 +111,23 @@ Each of these was a real defect. Check the ones a change could plausibly hit.
     about credentials at all. A command users would want and never hear
     about is as much a defect as one promised and never built.
 
+14. **A sample in a document is never run.** The guide's sample config
+    carried `(fix (on (findings-posted)))` through several revisions —
+    `findings-posted` is not in the trigger vocabulary, so it parses as an
+    ordinary list and is refused only when a run reaches it. Nothing about
+    reading the document says it is wrong. Any sample a reader would copy
+    should be parsed by a test with the real reader:
+    `tests/test-guide-config.scm` now does this, and it fails if the bad
+    predicate goes back.
+15. **A file embedded in code that also exists on disk.** The shim lives
+    both in `install.sld` (to scaffold) and at `templates/mesthiri.yml` (to
+    lint as YAML). Two copies of anything here drift, so assert
+    byte-identity in a test rather than remembering to update both.
+16. **A status claim that ages badly.** README said "M1 and M2 are in, 183
+    tests" long after M8. A count or milestone list in prose needs a command
+    behind it: `ls lib/mesthiri/*.sld | wc -l`, `grep -c "\[ \]" docs/plan.md`.
+
+
 ## Report and record
 
 Report only what a command established, most severe first: contradictions
