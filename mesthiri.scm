@@ -652,7 +652,9 @@
              (else
               (git-add-all workdir)
               (git-commit workdir
-                          (string-append "Fix review findings on #"
+                          ;; From the constant the depth counter matches on,
+                          ;; so the subject and the count cannot drift apart.
+                          (string-append fix-commit-prefix
                                          (number->string number))
                           (string-append summary "\n\n"
                                          (trailers (config-operator-name config)

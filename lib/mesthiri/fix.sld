@@ -10,7 +10,7 @@
 
 (define-library (mesthiri fix)
   (import (scheme base) (scheme write) (mesthiri agent) (mesthiri log))
-  (export fix-depth-limit fix-prompt fix-schema
+  (export fix-depth-limit fix-prompt fix-schema fix-commit-prefix
           depth-from-commits handover-comment)
   (begin
 
@@ -45,10 +45,27 @@
               ((fix-commit? (car c)) (loop (cdr c) (+ n 1)))
               (else (loop (cdr c) n)))))
 
+    ;; Only mesthiri's OWN fix commits, matched on the whole subject it
+    ;; writes. Matching the prefix "Fix " counted two other things and spent
+    ;; the budget before fix ever ran:
+    ;;
+    ;;   * the code stage's own implementation commit, `Fix #9`, which is on
+    ;;     every branch fix could possibly work on; and
+    ;;   * any human commit that happens to start with "Fix " — on the
+    ;;     sandbox, `Fix the shim: secrets inherit, not a mapping plus one`,
+    ;;     inherited from main and nothing to do with this branch.
+    ;;
+    ;; The result was "Pushed a fix (attempt 3 of 3)" on the FIRST attempt:
+    ;; three tries silently reduced to one, and the next event hands over.
+    ;; The clone is 50 commits deep, so main's history is in range and this
+    ;; has to be tight rather than approximately right.
+    (define fix-commit-prefix "Fix review findings on #")
+
     (define (fix-commit? subject)
       (and (string? subject)
-           (>= (string-length subject) 4)
-           (string=? (substring subject 0 4) "Fix ")))
+           (>= (string-length subject) (string-length fix-commit-prefix))
+           (string=? (substring subject 0 (string-length fix-commit-prefix))
+                     fix-commit-prefix)))
 
     (define (handover-comment depth summary)
       (string-append

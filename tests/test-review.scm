@@ -69,8 +69,28 @@
 
 ;; --- the fix loop is bounded ---------------------------------------------
 (check "depth counts mesthiri's own fix commits"
-       2 (depth-from-commits '("Fix #1" "Add feature" "Fix #1 again")))
+       2 (depth-from-commits '("Fix review findings on #10"
+                               "Add feature"
+                               "Fix review findings on #10")))
 (check "an unrelated history is depth zero" 0 (depth-from-commits '("Initial" "Docs")))
+
+;; Depth counts mesthiri's OWN fix commits and nothing else.
+;;
+;; This used to match any subject beginning with "Fix ", which spent the
+;; budget before fix ever ran. Two things collided, and both are on every
+;; real branch: the code stage's own implementation commit (`Fix #9`, which
+;; is by construction on any branch fix could work on) and any human commit
+;; starting with "Fix " — the sandbox had `Fix the shim: secrets inherit,
+;; not a mapping plus one`, inherited from main, since the clone is 50
+;; commits deep. Live result: "Pushed a fix (attempt 3 of 3)" on the FIRST
+;; attempt, so three tries became one and the next event hands over.
+(check "the code stage's own commit is not a fix attempt"
+       0 (depth-from-commits '("Fix #9")))
+(check "nor is an unrelated human commit that starts with Fix"
+       0 (depth-from-commits '("Fix the shim: secrets inherit, not a mapping plus one")))
+(check "the real branch that reported 'attempt 3 of 3' is depth zero"
+       0 (depth-from-commits
+          '("Fix #9" "Fix the shim: secrets inherit, not a mapping plus one")))
 (check "the limit is small on purpose" #t (<= fix-depth-limit 3))
 (define h (handover-comment 3 "tried narrowing the guard"))
 (check "the handover says why it stopped" #t (has? h "more likely to churn"))
