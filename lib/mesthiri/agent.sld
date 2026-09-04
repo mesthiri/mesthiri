@@ -26,7 +26,8 @@
           (only (srfi 18) thread-sleep!)
           (mesthiri proc)
           (mesthiri config) (mesthiri harness) (mesthiri sandbox) (mesthiri log))
-  (export agent-argv argv-in-directory untrusted-block frame-type frame-usage
+  (export agent-argv argv-in-directory directory-spawn-supported?
+          untrusted-block frame-type frame-usage
           terminal-frame? run-record make-run-record
           run-record-turns run-record-tokens run-record-outcome
           run-record-model run-record-frames
@@ -392,6 +393,14 @@
     ;; probe failure with some other cause is logged as that cause, not
     ;; blamed on kaappi.
     (define (directory-spawn-supported?)
+      ;; One-armed if on purpose, with the cache read AFTER it as the last
+      ;; expression of the body. Give the if a second arm — or let the set!
+      ;; arm's value become the result — and the first call returns set!'s
+      ;; unspecified value, which kaappi makes truthy: the probe then claims
+      ;; support for a build that refused, exactly the failure this function
+      ;; exists to prevent, and only on the platform without `directory:`,
+      ;; because the truthy-unspecified is indistinguishable from #t on the
+      ;; platform with it. `boolean?` is asserted on it in the suite.
       (if (eq? spawn-directory-mode 'unknown)
           (set! spawn-directory-mode
                 (guard (e (#t (log-warn "spawn-process directory: unavailable ("
@@ -403,8 +412,8 @@
                   (let ((p (spawn-process (list "/usr/bin/true")
                                           'directory: "/")))
                     (process-wait p)
-                    #t)))
-      spawn-directory-mode))
+                    #t))))
+      spawn-directory-mode)
 
     ;; The argv that runs `argv` in `workdir` without `directory:`:
     ;;

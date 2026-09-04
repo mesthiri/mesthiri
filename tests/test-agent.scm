@@ -51,6 +51,17 @@
 ;; construction must hold where it is the only option as well as where it is
 ;; never used — and a construction check alone would not notice a shell
 ;; re-splitting words behind it.
+;;
+;; The probe's result decides whether run-agent passes `directory:`, and its
+;; FIRST call must return a boolean on every platform. A probe that returned
+;; set!'s unspecified value — truthy in kaappi — would pass `directory:` on
+;; exactly the builds that refuse it; macOS stays green through all of it,
+;; because there truthy-unspecified and #t behave the same. This check is
+;; what fails on macOS too, the day that shape returns.
+(check "the directory probe returns a boolean, first call included"
+       #t (boolean? (directory-spawn-supported?)))
+(check "and says the same thing when asked again"
+       #t (boolean? (directory-spawn-supported?)))
 (check "the fallback argv is the fixed script with workdir and argv as parameters"
        '("/bin/sh" "-c" "cd -- \"$1\" && shift && exec \"$@\""
          "mesthiri" "/" "/bin/pwd")
