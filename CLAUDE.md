@@ -18,10 +18,10 @@ experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
 was wrong; `README.md` is the public face. Keep all six in sync with
-reality. M1 has landed (`lib/mesthiri/*.sld`, 107 tests); the README and the
-guide must keep saying that nothing is *installable* until dispatch, a shim
-and a stage exist, because a reader who tries the guide today finds no
-command that runs.
+reality. M1 and M2 have landed (`lib/mesthiri/*.sld`, 183 tests): dispatch,
+the shim and commands work, but no stage does. The README and the guide must
+keep saying so until a stage lands, because a reader who tries the guide
+today gets a command that is parsed and authorized and then does nothing.
 
 `AGENTS.md` is a symlink to this file, so tools looking for either name get
 the same instructions. Edit this file, not the link. Note that an

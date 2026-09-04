@@ -9,14 +9,15 @@ an orchestrator that directs headless coding agents through the software
 development lifecycle, while humans set direction, define guardrails, and
 review outcomes.
 
-## Status: pre-alpha (M1 landed, nothing is installable yet)
+## Status: pre-alpha (M1 and M2 landed, no stages yet)
 
 The design is settled (see [docs/design.md](docs/design.md)) and
-[docs/plan.md](docs/plan.md) sequences the work. **M1 is in**: config
-reading, the normalized event, the trigger interpreter, App JWT signing, the
-GitHub REST client and logging, under 107 tests. Nothing is installable —
-dispatch, the shim workflow and every stage are still ahead, so there is no
-version you can point at a repository yet. The project's subprocess needs
+[docs/plan.md](docs/plan.md) sequences the work. **M1 and M2 are in**: the
+modules underneath, and dispatch — the shim workflow, the reusable workflow,
+slash commands with permission checks, and `explain-event` — under 183
+tests. What is missing is the part that does anything: every stage, triage
+onward, is still ahead. Installing mesthiri today would give you a pipeline
+that authorizes events correctly and then has nothing to run. The project's subprocess needs
 drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
 — native `(kaappi process)` support — which **shipped in Kaappi v0.26.0**

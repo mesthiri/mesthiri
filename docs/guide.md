@@ -1,8 +1,8 @@
 # mesthiri — user guide
 
-> **Nothing here works yet.** M1 has landed — the modules underneath — but
-> no command in this guide runs: there is no dispatch, no shim workflow and
-> no stage. This guide describes the experience mesthiri is being built to
+> **Nothing here works yet.** M1 and M2 have landed, so dispatch, the shim
+> workflow and slash commands exist — but no stage does. A command in this
+> guide would be parsed, authorized and then find nothing to run. This guide describes the experience mesthiri is being built to
 > deliver, written early and deliberately, because a command that reads
 > badly on the page will read worse in a terminal. Every transcript below is
 > designed, not captured. When something here turns out to be wrong once it is real,
