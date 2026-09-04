@@ -80,6 +80,22 @@ symlink and would overwrite everything here.
   deliberately not path-filtered, so it is safe to mark as a required check;
   the reason is in a comment at the top of it.
 
+## Skills
+
+`.claude/skills/` holds this project's own skills, checked in so they improve
+with the work rather than living in one session's head:
+
+- **`docs-sync`** — audit the six documents against each other after a
+  design change. It carries the drift patterns that have actually produced
+  defects here, and gains one whenever a new kind is found.
+- **`capture-lesson`** — decide where something learned belongs (a rule
+  here, a check in `docs-sync`, a terminology entry, a script, a new skill)
+  and write it there. Run it when a review finds a defect, a claim turns out
+  false when tested, or a decision reverses.
+
+Both end by updating themselves, which is the point: a lesson left in a
+commit message is one the next session repeats.
+
 ## Related work
 
 - KEP-0022 (native subprocess support): **Final** — shipped in kaappi
