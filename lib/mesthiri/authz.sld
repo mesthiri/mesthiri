@@ -50,9 +50,10 @@
       (let* ((name   (command-name cmd))
              (entity (command-entity name))
              (kind   (event-kind event))
-             (on-pr? (memq kind '(pull-request-opened pull-request-updated
+             (on-pr? (or (event-on-pull-request? event)
+                         (memq kind '(pull-request-opened pull-request-updated
                                   pull-request-labeled pull-request-other
-                                  pull-request-review)))
+                                  pull-request-review))))
              (actor  (event-actor event)))
         (cond
          ;; Entity first: a command in the wrong place is refused before a

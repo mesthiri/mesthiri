@@ -9,6 +9,16 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.11] — 2026-09-04
+
+### Fixed
+
+- **A comment on a pull request is recognised as one.** GitHub delivers it
+  as `issue_comment`, with the issue carrying a `pull_request` key, and
+  mesthiri never looked at that key — so `/review` and `/fix`, both
+  pull-request commands, were refused with "run it on the pull request" when
+  they had been. Two of the five commands were unreachable.
+
 ## [0.1.10] — 2026-09-04
 
 ### Fixed

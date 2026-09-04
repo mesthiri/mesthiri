@@ -18,7 +18,7 @@
               (if (and (pair? opts) (pair? (cdr opts))) (cadr opts) #f)
               "" 1
               (if (and (pair? opts) (pair? (cdr opts)) (pair? (cddr opts))) (caddr opts) #f)
-              #f))
+              #f #f))
 
 ;; --- vocabulary -------------------------------------------------------
 (check "event predicate matches its kind" #t (trigger-match? '(issue-opened) (ev 'issue-opened)))

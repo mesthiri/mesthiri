@@ -51,7 +51,7 @@
               "" 1
               (if (and (pair? opts) (pair? (cdr opts)) (pair? (cddr opts)))
                   (caddr opts) #f)
-              (equal? actor "mesthiri[bot]")))
+              (equal? actor "mesthiri[bot]") #f))
 
 (define (outcome-of e) (decision-outcome (dispatch f cfg e handlers never-handled)))
 
@@ -112,7 +112,7 @@
        'own-comment
        (decision-outcome
         (dispatch f cfg (make-event 'issue-comment "o/r" "mesthiri-reader[bot]" 1
-                                    '() marked "" 1 #f #t)
+                                    '() marked "" 1 #f #t #f)
                   handlers never-handled)))
 
 ;; The two signals are both required, and each guards a different mistake.
@@ -121,13 +121,13 @@
        (decision-outcome
         (dispatch f cfg (make-event 'issue-comment "o/r" "alice" 1 '()
                                     (string-append "/triage\n" marker-prefix "1 -->")
-                                    "" 1 #f #f)
+                                    "" 1 #f #f #f)
                   handlers never-handled)))
 (check "another bot's command is NOT suppressed — authorization is by permission"
        'unauthorized
        (decision-outcome
         (dispatch f cfg (make-event 'issue-comment "o/r" "dependabot[bot]" 1 '()
-                                    "/implement" "" 1 #f #t)
+                                    "/implement" "" 1 #f #t #f)
                   handlers never-handled)))
 ;; Labels mesthiri applies must still dispatch, or prioritize could never hand
 ;; work to the code stage.
@@ -135,7 +135,7 @@
        'ran
        (decision-outcome
         (dispatch f cfg (make-event 'issue-labeled "o/r" "mesthiri-reader[bot]" 1
-                                    '("ready-to-implement") #f "" 1 #f #t)
+                                    '("ready-to-implement") #f "" 1 #f #t #f)
                   handlers never-handled)))
 
 ;; --- a malformed trigger is reported, not silently non-matching ----------

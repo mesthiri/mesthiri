@@ -19,12 +19,13 @@
   (export make-event event? normalize-event
           event-kind event-repo event-actor event-number event-labels
           event-body event-action event-id event-schedule-tick
-          event-bot? payload-ref
+          event-bot? event-on-pull-request? payload-ref
           marker-prefix event-marker event-own-comment?)
   (begin
 
     (define-record-type <event>
-      (make-event kind repo actor number labels body action id schedule-tick bot?)
+      (make-event kind repo actor number labels body action id schedule-tick bot?
+                  on-pull-request?)
       event?
       (kind          event-kind)          ; symbol, see normalize-event
       (repo          event-repo)          ; "owner/name"
@@ -35,7 +36,12 @@
       (action        event-action)        ; the forge's action string
       (id            event-id)            ; for idempotency: comment/delivery id
       (schedule-tick event-schedule-tick) ; "YYYY-MM-DDTHH" of the tick, or #f
-      (bot?          event-bot?))         ; did one of mesthiri's Apps act
+      (bot?          event-bot?)          ; did one of mesthiri's Apps act
+      ;; A comment on a pull request arrives as `issue_comment`, with the
+      ;; issue carrying a `pull_request` key. Nothing else distinguishes
+      ;; the two, so without this a pull-request command like /review is
+      ;; refused as "run it on the pull request" — when it was.
+      (on-pull-request? event-on-pull-request?))
 
     ;; mesthiri stamps every comment it writes with this, so it can recognise
     ;; its own work later. It serves two purposes and they are related: the
@@ -104,6 +110,8 @@
              (repo   (payload-ref payload "repository" "full_name"))
              (issue  (payload-ref payload "issue"))
              (pr     (payload-ref payload "pull_request"))
+             ;; Present only when the commented-on issue is a pull request.
+             (issue-is-pr (and (payload-ref payload "issue" "pull_request") #t))
              (actor  (or (payload-ref payload "comment" "user" "login")
                          (payload-ref payload "sender" "login")))
              (labels (map (lambda (l) (or (payload-ref l "name") ""))
@@ -137,4 +145,5 @@
                         (payload-ref issue "number")
                         (payload-ref pr "number"))
                     tick
-                    (bot-login? actor))))))
+                    (bot-login? actor)
+                    (or issue-is-pr (and pr #t)))))))

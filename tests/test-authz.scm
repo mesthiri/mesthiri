@@ -29,7 +29,7 @@
 
 (define (ev kind actor . opts)
   (make-event kind "o/r" actor 1 '() (if (pair? opts) (car opts) #f) "" 1 #f
-              (if (and (pair? opts) (pair? (cdr opts))) (cadr opts) #f)))
+              (if (and (pair? opts) (pair? (cdr opts))) (cadr opts) #f) #f))
 
 ;; --- permission lookup --------------------------------------------------
 (check "role_name is preferred over permission" 'write (actor-permission f "o/r" "alice"))
@@ -83,9 +83,40 @@
        #t (authz-ok? (authorize-label f (ev 'issue-labeled "bob") 'triage)))
 
 ;; mesthiri's own Apps are exempt: this is the pipeline moving its own work.
-(define bot-ev (make-event 'issue-labeled "o/r" "mesthiri[bot]" 1 '() #f "" 1 #f #t))
+(define bot-ev (make-event 'issue-labeled "o/r" "mesthiri[bot]" 1 '() #f "" 1 #f #t #f))
 (check "a label applied by mesthiri's App passes without a lookup"
        #t (authz-ok? (authorize-label f bot-ev 'write)))
+
+;; --- a comment on a pull request is on a pull request ---------------------
+;;
+;; GitHub delivers it as `issue_comment`, with the issue carrying a
+;; `pull_request` key; nothing else distinguishes it from a comment on an
+;; issue. Without looking at that key, /review — a pull-request command — was
+;; refused with "run it on the pull request" when it had been. Two of the five
+;; commands were unreachable.
+(define (on-pr kind actor body)
+  (make-event kind "o/r" actor 5 '() body "" 1 #f #f #t))
+(define (auth-on-pr actor body)
+  (authorize-command f (on-pr 'issue-comment actor body)
+                     (car (parse-commands body))))
+
+(check "/review on a pull request is allowed"
+       #t (authz-ok? (auth-on-pr "alice" "/review")))
+;; The same command on an issue is still refused, and for the right reason.
+(check "/review on an issue is refused"
+       #f (authz-ok? (auth-cmd "alice" "/review")))
+(check "and the refusal says where to run it"
+       #t (let ((d (auth-cmd "alice" "/review")))
+            (and (authz-reason d)
+                 (let ((r (authz-reason d)))
+                   (let loop ((i 0))
+                     (cond ((> (+ i 26) (string-length r)) #f)
+                           ((string=? (substring r i (+ i 26))
+                                      "run it on the pull request") #t)
+                           (else (loop (+ i 1)))))))))
+;; An issue command on a pull request is refused the other way round.
+(check "/triage on a pull request is refused"
+       #f (authz-ok? (auth-on-pr "alice" "/triage")))
 
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)

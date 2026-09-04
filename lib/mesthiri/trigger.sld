@@ -139,5 +139,5 @@
     (define (trigger-valid? form)
       (guard (e ((trigger-error? e) #f))
         (trigger-match? form
-                        (make-event 'schedule "o/r" "x" 1 '() "" "" 1 "monday 00:00" #f))
+                        (make-event 'schedule "o/r" "x" 1 '() "" "" 1 "monday 00:00" #f #f))
         #t))))
