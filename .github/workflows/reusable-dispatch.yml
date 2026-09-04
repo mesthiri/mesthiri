@@ -60,6 +60,19 @@ jobs:
           mv libkaappi_net.so libkaappi_http.so ~/.kaappi/lib/
           chmod +x mesthiri
 
+      # TEMPORARY: same binary, before the sandbox step.
+      - name: Probe BEFORE the sandbox step
+        continue-on-error: true
+        env:
+          MESTHIRI_EVENT_NAME: ${{ github.event_name }}
+          MESTHIRI_EVENT_PATH: ${{ github.event_path }}
+          MESTHIRI_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          ulimit -c 0
+          ./mesthiri explain-event > /tmp/before.out 2>&1
+          echo "BEFORE exit=$?"; head -4 /tmp/before.out
+
       # The agent runs inside a bubblewrap namespace, and mesthiri refuses to
       # run it otherwise — so this step is load-bearing, not a convenience.
       #
@@ -102,10 +115,8 @@ jobs:
           npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
           pi --version
 
-      # TEMPORARY: v0.1.5 dies with SIGILL here and v0.1.4 does not, with no
-      # output at all. Synthetic events crash both, so the comparison has to
-      # use this run's real event.
-      - name: Compare against the previous release
+      # TEMPORARY: the same call, after it.
+      - name: Probe AFTER the sandbox step
         continue-on-error: true
         env:
           MESTHIRI_EVENT_NAME: ${{ github.event_name }}
@@ -113,14 +124,10 @@ jobs:
           MESTHIRI_REPO: ${{ github.repository }}
         run: |
           set +e
-          base="https://github.com/mesthiri/mesthiri/releases/download/v0.1.4"
-          curl -fsSL -o prev "$base/mesthiri-x86_64-linux"; chmod +x prev
-          for b in prev mesthiri; do
-            echo "===== $b explain-event ====="
-            ./$b explain-event 2>&1 | head -6; echo "exit=${PIPESTATUS[0]}"
-          done
-          echo "===== v0.1.5 dispatch, no model key (should reach a forge error) ====="
-          ./mesthiri dispatch 2>&1 | head -20; echo "exit=${PIPESTATUS[0]}"
+          ulimit -c 0
+          ./mesthiri explain-event > /tmp/after.out 2>&1
+          echo "AFTER exit=$?"; head -4 /tmp/after.out
+          echo "--- userns sysctl now:"; sysctl kernel.apparmor_restrict_unprivileged_userns
 
       - name: Dispatch
         env:
