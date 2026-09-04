@@ -36,7 +36,7 @@ promptly and there is still nothing listening on a port.
       PR, Issues write for state comments on the issue), neither with merge
       permission, neither with a webhook URL. Store each private key as a
       repository secret on the target.
-- [ ] **Ecosystem deps installed**: `kaappi-http` and `kaappi-net` are C-FFI
+- [x] **Ecosystem deps installed** (dev machine done): `kaappi-http` and `kaappi-net` are C-FFI
       libraries, so their built shared object has to be where the FFI loader
       looks (`~/.kaappi/lib/`) — `--lib-path` alone finds the Scheme and not
       the `.dylib`, and the failure is `ffi-open: dlopen … relative path not
@@ -51,11 +51,14 @@ promptly and there is still nothing listening on a port.
       terminal; and that pi reads `AGENTS.md`/`CLAUDE.md` from the working
       directory by default, which in a target's scratch clone is a
       prompt-injection path — so `--no-context-files` is not optional.
-- [ ] Sandbox target: `mesthiri/sandbox`, a small disposable repo with its
-      own test command and seeded issues. First used by M2's demo and the
-      code stage's in M6. Its shim workflow is committed **by hand** until
-      M9 automates installation — worth saying, because every milestone from
-      M2 on quietly depends on a shim existing somewhere.
+- [x] Sandbox target: `mesthiri/sandbox` exists — a tiny Kaappi library
+      whose test suite is green as committed, with one deliberate defect
+      (`median` returns the upper middle element for even-length lists), so
+      a fix must add the failing assertion as well as make it pass. Four
+      seeded issues cover the cases triage must tell apart: a reproducible
+      defect, a feature request, a docs typo, and one whose body tries to
+      instruct the agent. Its shim and `.mesthiri/` are hand-committed until
+      M9, and every stage is off but triage in dry-run.
 - [x] Branch protection on `mesthiri/mesthiri`: the `diagrams` check is
       required, force pushes and deletions blocked, conversation resolution
       required. Admins are not enforced, so the owner can still push to

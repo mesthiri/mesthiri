@@ -78,7 +78,7 @@ the scratch clone as its only writable path. State lives in the repository:
 workflow state in labels a human can read and change, those same labels
 acting as the watermark for scheduled sweeps, and run history in your CI's
 own run history — mesthiri keeps no state you cannot see. Guardrails are
-structural: no App holds merge permission, the shim uses
+structural: mesthiri has no code path that merges, the shim uses
 `pull_request_target` and never checks out a PR's code, the agent holds no
 credential and has no route to the forge — it writes commits and the job
 does the pushing — its output is schema-checked outside itself, a path

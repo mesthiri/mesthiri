@@ -132,7 +132,7 @@ flowchart LR
 ```
 
 The two shaded boxes are the only places a human is mandatory. The merge
-gate is structural — no App holds merge permission. The retro gate is not:
+gate is structural — mesthiri has no code path that merges, and branch protection enforces it. The retro gate is not:
 retro files its proposals on the repository mesthiri is installed in, so
 those issues can re-enter the pipeline like any others, and a human reading
 them is a matter of them being ordinary issues rather than a mechanism

@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Register mesthiri's GitHub Apps</title>
+<style>
+ body{font:15px/1.6 system-ui;margin:2rem auto;max-width:44rem;padding:0 1rem}
+ button{font:inherit;padding:.6rem 1rem;cursor:pointer;border-radius:6px;
+        border:1px solid #888;background:#f6f6f6}
+ code{background:#f0f0f0;padding:.1em .3em;border-radius:3px}
+ .warn{background:#fff8e1;border-left:4px solid #b8860b;padding:.6rem 1rem;margin:1rem 0}
+ table{border-collapse:collapse;margin:.5rem 0}td,th{border:1px solid #ddd;padding:.3rem .6rem;text-align:left}
+</style>
+<h1>Register mesthiri's two GitHub Apps</h1>
+<p>Two Apps, so the stages that only read code cannot write it. Each button
+opens GitHub's App creation page with the name and permissions already filled
+in — you review and confirm. GitHub shows the private key <b>once</b>: save it
+before leaving that page.</p>
+
+<div class="warn">
+<b>On "no merge permission".</b> GitHub has no separate merge permission to
+withhold — merging a pull request is authorised by <code>contents: write</code>,
+which the writer App needs in order to push a branch at all. So the writer
+App <i>could</i> merge, and mesthiri's guarantee that it never does rests on
+two things instead: branch protection on the target repository, and mesthiri
+having no code path that calls the merge endpoint. Keep branch protection on.
+</div>
+
+<h2>1. mesthiri-reader</h2>
+<table><tr><th>Permission</th><th>Level</th></tr>
+<tr><td>Issues</td><td>write — comments and labels</td></tr>
+<tr><td>Pull requests</td><td>write — review comments</td></tr>
+<tr><td>Contents</td><td><b>read</b> — cannot write code</td></tr>
+<tr><td>Metadata</td><td>read</td></tr></table>
+<form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
+  <input type="hidden" name="manifest" value='{"name": "mesthiri-reader", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.", "public": false, "default_permissions": {"issues": "write", "pull_requests": "write", "contents": "read", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request", "pull_request_review"]}'>
+  <button type="submit">Create mesthiri-reader</button>
+</form>
+
+<h2>2. mesthiri-writer</h2>
+<table><tr><th>Permission</th><th>Level</th></tr>
+<tr><td>Contents</td><td>write — branches and commits</td></tr>
+<tr><td>Pull requests</td><td>write — open the PR</td></tr>
+<tr><td>Issues</td><td>write — state comments</td></tr>
+<tr><td>Metadata</td><td>read</td></tr></table>
+<form action="https://github.com/organizations/mesthiri/settings/apps/new" method="post">
+  <input type="hidden" name="manifest" value='{"name": "mesthiri-writer", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: code and fix. Pushes branches and opens pull requests.", "public": false, "default_permissions": {"contents": "write", "pull_requests": "write", "issues": "write", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request"]}'>
+  <button type="submit">Create mesthiri-writer</button>
+</form>
+
+<h2>Afterwards</h2>
+<ol>
+<li>Note each App's <b>App ID</b> and put them in the target repo's
+    <code>.mesthiri/config.scm</code> as
+    <code>(apps (reader ID) (writer ID))</code>. These are not secrets.</li>
+<li>Install both Apps on <code>mesthiri/sandbox</code> only, to start.
+    An App's installation set is its blast radius.</li>
+<li>Add the private keys as repository secrets
+    <code>MESTHIRI_{"name": "mesthiri-reader", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: triage, prioritize, review and retro. Comments and labels; cannot write code.", "public": false, "default_permissions": {"issues": "write", "pull_requests": "write", "contents": "read", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request", "pull_request_review"]}_KEY</code> and <code>MESTHIRI_{"name": "mesthiri-writer", "url": "https://github.com/mesthiri/mesthiri", "description": "mesthiri: code and fix. Pushes branches and opens pull requests.", "public": false, "default_permissions": {"contents": "write", "pull_requests": "write", "issues": "write", "metadata": "read"}, "default_events": ["issues", "issue_comment", "pull_request"]}_KEY</code>,
+    then delete the downloaded <code>.pem</code> files.</li>
+<li>Verify with <code>mesthiri whoami --app reader --key key.pem</code>.</li>
+</ol>

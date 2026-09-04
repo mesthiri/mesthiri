@@ -275,7 +275,17 @@ mesthiri authenticates as GitHub Apps that the operator registers and
 installs. Permissions are split by role, following fullsend's ADR 0007:
 a **reader** App for triage, prioritize, review and retro — which comments
 and moves labels but cannot write code — and a **writer** App for code and
-fix. Compromising the reviewer's credential
+fix.
+
+**A correction worth stating plainly.** Earlier revisions of this document
+said no App holds merge permission, as though that were something to
+withhold. GitHub has no separate merge permission: merging a pull request is
+authorised by `contents: write`, which the writer App needs in order to push
+a branch at all. So the writer App *can* technically merge, and the promise
+that mesthiri never does rests on two things instead — mesthiri has no code
+path that calls the merge endpoint, and the target repository keeps branch
+protection on. The first is ours to keep; the second is the operator's, which
+is why the guide tells them to keep it. Compromising the reviewer's credential
 then grants nothing the reviewer did not already have.
 
 The App private key is a repository or organization secret, and mesthiri
@@ -479,7 +489,7 @@ stage refuses to run.
 
 | Guardrail | Mechanism |
 |---|---|
-| Humans gate merges | no App holds merge permission; branch protection stays on |
+| Humans gate merges | mesthiri has no code path that merges; branch protection is the enforcing control (see below) |
 | Least privilege | reader and writer Apps, installed per repository, short-lived tokens |
 | Shim cannot be hijacked | `pull_request_target`, and the PR's code is never checked out by it |
 | Agent containment | namespace sandbox inside the runner; credentials outside its mount namespace; forge off its egress allowlist |

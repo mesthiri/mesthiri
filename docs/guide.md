@@ -92,8 +92,12 @@ code cannot write it:
 | `mesthiri-reader` | triage, prioritize, review, retro | issues and pull requests: write (for comments and labels); contents: **read** |
 | `mesthiri-writer` | code, fix | contents: write; pull requests: write; issues: write (state comments on the issue) |
 
-Neither gets merge permission. That is not a setting you can turn on later
-by accident — mesthiri has no code path that merges anything.
+Neither App is given more than it needs — but note what that does *not*
+buy you. GitHub has no separate merge permission: merging is authorised by
+`contents: write`, which the writer needs to push a branch at all. mesthiri
+never merges because it has no code path that calls the merge endpoint, and
+because your branch protection stops it. Keep branch protection on; it is the
+control that actually enforces this, rather than a permission you withheld.
 
 ```bash
 mesthiri apps create --repo owner/repo
@@ -523,7 +527,7 @@ somewhere else, because there is no somewhere else.
 
 ## What mesthiri will never do
 
-- **Merge anything.** No App holds merge permission.
+- **Merge anything.** There is no code path that calls the merge endpoint, and your branch protection is what enforces it.
 - **Touch a denied path**, including its own configuration.
 - **Act on tier 2 work** without a human authorizing it.
 - **Take instructions from issue text.** Issue and pull request bodies are
