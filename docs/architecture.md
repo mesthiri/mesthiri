@@ -83,7 +83,7 @@ flowchart TD
   authz -->|"yes"| dedupe{"already acted<br/>on this event id?"}
   dedupe -->|"yes"| drop["exit, idempotent"]
   dedupe -->|"no"| match["match trigger predicates<br/>interpreted, never eval'd"]
-  match --> elig{"eligible?<br/>intent tier + path denylist"}
+  match --> elig{"for a writing stage:<br/>intent tier + path denylist"}
   elig -->|"no"| esc["needs-human"]
   elig -->|"yes"| stage["run the one matching stage"]
 ```
@@ -116,10 +116,13 @@ flowchart LR
   style human2 fill:#ffe9b3,stroke:#b8860b,stroke-width:2px
 ```
 
-The two shaded boxes are the only places a human is mandatory, and both are
-structural rather than procedural: the App holds no merge permission, and
-mesthiri is never configured as a target of its own pipeline, so it cannot
-implement the retro proposals it files.
+The two shaded boxes are the only places a human is mandatory. The merge
+gate is structural — no App holds merge permission. The retro gate is not:
+retro files its proposals on the repository mesthiri is installed in, so
+those issues can re-enter the pipeline like any others, and a human reading
+them is a matter of them being ordinary issues rather than a mechanism
+stopping anything. What *is* structural is that mesthiri is never installed
+on its own repository, so it cannot act on proposals about itself.
 
 ## 4. The code stage, at the credential boundary
 
@@ -159,9 +162,10 @@ change takes to GitHub rather than beside it — there is no second path.
 
 ## 5. Workflow labels
 
-Workflow state lives on the target repo where a human can read it and change
-it, not only in mesthiri's database. Transitions are guarded, states are
-mutually exclusive, and every write is read back to confirm it took.
+Workflow state lives on the repository where a human can read it and change
+it. There is no database it could live in instead — these labels are the
+state. Transitions are guarded, states are mutually exclusive, and every
+write is read back to confirm it took.
 
 ```mermaid
 stateDiagram-v2
@@ -222,7 +226,7 @@ flowchart TD
 
   subgraph base["foundations"]
     direction LR
-    config["config.scm reader"]
+    config["config.sld<br/>reads .mesthiri/config.scm"]
     logmod["log.sld"]
     jwt["jwt.sld"]
     proc["proc.sld<br/>run/spawn-process"]

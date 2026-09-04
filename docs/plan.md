@@ -39,7 +39,10 @@ promptly and there is still nothing listening on a port.
       what it needs from filesystem and network — M3's sandbox policy comes
       from that list.
 - [ ] Sandbox target: `mesthiri/sandbox`, a small disposable repo with its
-      own test command and seeded issues. M6's demo target.
+      own test command and seeded issues. First used by M2's demo and the
+      code stage's in M6. Its shim workflow is committed **by hand** until
+      M9 automates installation — worth saying, because every milestone from
+      M2 on quietly depends on a shim existing somewhere.
 - [ ] Org hygiene: DCO app + branch protection on `mesthiri/mesthiri`.
 - [ ] CI for this repo: build the binary, run the test suite on push/PR.
 
@@ -47,7 +50,7 @@ promptly and there is still nothing listening on a port.
 
 Everything here runs locally against fixtures. Nothing touches CI yet.
 
-- [ ] `lib/mesthiri/config.scm` reader — `.mesthiri/config.scm` parsed with
+- [ ] `lib/mesthiri/config.sld` — reads `.mesthiri/config.scm` with
       `read`: rubric path, budgets, path denylist, command permissions,
       pinned agent version, `operator:` identity. No target list — mesthiri
       acts on the repository it is installed in. Validation refuses triage
@@ -115,6 +118,12 @@ with no server.
       unprivileged uid.
 - [ ] **Output validation** outside the agent: declared schema, capped
       retries, then hard fail.
+- [ ] Budgets: per-run token, turn and wall-clock caps enforced by the run
+      on itself, and the **derived cross-run cap** — before starting, query
+      recent workflow runs and their traces and decline if the day's spend
+      already looks exhausted. This is the only place that approximation
+      exists, so it lives with the budgets rather than being assumed by
+      every stage.
 - [ ] `.mesthiri/harness/<role>.scm` — prompt, allowed tools, model and
       effort, budgets and sandbox policy as one reviewable file per role.
 - [ ] Prompt hygiene: issue and PR text enters prompts only inside an
@@ -148,11 +157,23 @@ cannot reach a host off the allowlist.
 **Demo:** scheduled dry-run triage on kaappi/kaappi that the org owner
 spot-checks; going live is a config change.
 
+Note the shape of that ask has changed. When mesthiri was a service it could
+be pointed at kaappi/kaappi from outside; per-repo installation means the
+demo needs a shim workflow committed **into the core repo**, which is a
+pull request against 2000-plus commits of someone's main project. Run it on
+`mesthiri/sandbox` first and treat kaappi/kaappi as the graduation.
+
 ## M5 — Prioritize
 
-- [ ] Rank triaged issues into the ready queue — the target's own rubric
-      first, RICE-style scoring where it has none — on the scheduled run,
-      moving labels rather than rows.
+- [ ] Rank triaged issues into the ready queue — the repository's own
+      rubric first, RICE-style scoring where it has none — on the scheduled
+      run, moving labels rather than rows.
+- [ ] Ranking is explainable: the scheduled run leaves a comment on each
+      issue it promotes saying what moved it, so a maintainer can disagree
+      with the ranking rather than only with the outcome.
+
+**Demo:** a scheduled run on `mesthiri/sandbox` turns a set of triaged
+issues into an ordered `ready-to-implement` set, with a reason on each.
 
 ## M6 — Code stage
 
@@ -190,6 +211,11 @@ third at tier 2 waiting for a human.
       bounded depth, then hand to a human.
 - [ ] Stale-approval rule enforced: a new commit clears downstream labels.
 
+**Demo:** on the M6 pull request, review posts findings; `/fix` consumes
+them, pushes, and the tests re-run; a fresh commit visibly clears
+`ready-for-merge`. A deliberately unfixable finding exhausts the depth and
+hands over with `needs-human`.
+
 ## M8 — Retro
 
 - [ ] Mine completed CI runs and their JSONL trace artifacts for timings,
@@ -200,7 +226,12 @@ third at tier 2 waiting for a human.
       uses, and needs no cross-repo credential.
 - [ ] Improvements to mesthiri itself arrive the ordinary way: a human
       reads a retro issue and reports it upstream. mesthiri is never
-      installed on its own repository, and `mesthiri install` refuses it.
+      installed on its own repository — the refusal lands with `install` in
+      M9; until then it is a rule in the README rather than a mechanism.
+
+**Demo:** after the M6 and M7 runs, a scheduled retro files an issue on
+`mesthiri/sandbox` naming something real — a test that failed twice, or a
+stage that spent its budget without reaching green.
 
 ## M9 — Installation and distribution
 
@@ -214,6 +245,11 @@ third at tier 2 waiting for a human.
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.
 - [ ] A preset for the kaappi org so its repos install with one command.
+- [ ] `mesthiri install` refuses mesthiri's own repository.
+
+**Demo:** `mesthiri install` opens a pull request against a repo that has
+never seen mesthiri, and merging it is enough to make `/triage` work.
+Uninstall reverses it and leaves no trace but the labels.
 
 ## Later / explicitly deferred
 
