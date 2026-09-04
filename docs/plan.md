@@ -42,7 +42,7 @@ because M1 and M2 each block on one.
       written from that list.
 - [ ] Sandbox target: create `mesthiri/sandbox` (a small real-but-disposable
       repo with its own test command) and seed it with issues; install the
-      App on it. This is M4's demo target.
+      App on it. This is M5's demo target.
 - [ ] Org hygiene: DCO app + branch protection on `mesthiri/mesthiri`
       before any outside PR
 - [ ] CI: `.github/workflows/ci.yml` — install the released kaappi binary,
@@ -126,26 +126,12 @@ describing it: the agent cannot read the secrets directory, cannot write
 outside its scratch clone, and cannot reach a host that is not on the
 allowlist. Those three are tests, not a paragraph.
 
-## M3 — Triage stage, commands, workflow labels
+## M3 — Triage stage (first forge-visible value)
 
-First forge-visible value, and the first time a human can ask mesthiri for
-something directly.
+Cron-driven and one module wide. The `priority:` label triage writes is a
+plain forge call — the workflow label *state machine* is M4's problem, and
+triage does not need it to be useful.
 
-- [ ] `lib/mesthiri/event.sld` — one **normalized event** every trigger
-      funnels into (cron tick, queue item, forge event), with delivery
-      behind a **driver**. The polling driver lands here; M5's webhook
-      receiver becomes a second driver and the stages never learn which one
-      woke them.
-- [ ] `lib/mesthiri/command.sld` — `/triage`, `/implement`, `/review`,
-      `/fix`, `/retro` parsed by a plain grammar, never by a model.
-      Authorized against the **commenter's** permission on the target repo
-      (write+ to mutate, triage+ for read-only), restricted to the entity
-      where their inputs exist, de-duplicated by comment id, and answered
-      with an explicit refusal comment when unauthorized. Tests include a
-      command-shaped string inside an issue body that must not execute.
-- [ ] `lib/mesthiri/labels.sld` — the workflow label state machine:
-      declared legal transitions, mutual exclusion, write-then-read-back
-      confirmation, transitions recorded in the store.
 - [ ] `lib/mesthiri/triage.sld`: for each unseen issue — verify the issue's
       claims against a checkout using the M2 agent, classify per the rubric
       read from the *target repo* at its configured path (first target:
@@ -165,10 +151,43 @@ something directly.
       drive it externally; pick one as default at deploy time.
 
 **Demo:** nightly dry-run against kaappi/kaappi producing verdicts that the
-org owner spot-checks, plus `/triage` on a single issue returning a verdict
-on demand; graduation to live labels is a config flip.
+org owner spot-checks; graduation to live labels is a config flip.
 
-## M4 — Code stage
+## M4 — Commands and workflow labels
+
+The first time a human can ask mesthiri for something directly, and the
+first time its state is legible without reading its database. Split out of
+M3 because triage is worth shipping on its own, and because these three
+modules are a coherent piece of work rather than an appendix to a stage.
+
+- [ ] `lib/mesthiri/event.sld` — one **normalized event** every trigger
+      funnels into (cron tick, queue item, forge event), with delivery
+      behind a **driver**. The polling driver lands here. It arrives with
+      commands rather than with triage on purpose: cron alone would make it
+      a one-consumer abstraction, which is a guess dressed as a design —
+      commands give it a real second shape to satisfy. M6's webhook
+      receiver then slots in as the second delivery driver, and the stages
+      never learn which one woke them.
+- [ ] `lib/mesthiri/command.sld` — `/triage`, `/implement`, `/review`,
+      `/fix`, `/retro` parsed by a plain grammar, never by a model.
+      Authorized against the **commenter's** permission on the target repo
+      (write+ to mutate, triage+ for read-only), restricted to the entity
+      where their inputs exist, de-duplicated by comment id, and answered
+      with an explicit refusal comment when unauthorized. Tests include a
+      command-shaped string inside an issue body that must not execute.
+- [ ] `lib/mesthiri/labels.sld` — the workflow label state machine:
+      declared legal transitions, mutual exclusion, write-then-read-back
+      confirmation, transitions recorded in the store, and the
+      clear-downstream-on-new-commit rule implemented here even though the
+      approval it protects does not exist until M6.
+- [ ] Triage re-enters through the command path, so `/triage <issue>` and
+      the nightly cron run reach the same code by different doors.
+
+**Demo:** `/triage` on a single issue returns a verdict on demand; the same
+command from an account without triage permission is refused with a comment
+explaining why; an illegal label transition is rejected rather than written.
+
+## M5 — Code stage
 
 - [ ] **Eligibility gate before anything is spawned**: refuse tier-2 issues
       without explicit human authorization, and refuse to open a PR whose
@@ -189,15 +208,15 @@ reviewed PR out, with the pipeline run record to show for it. A second
 seeded issue asks for a change to a denylisted path and is refused with a
 comment; a third is tier 2 and waits for a human.
 
-## M5 — Review + Fix stages
+## M6 — Review + Fix stages
 
-- [ ] Webhook receiver as a **second event driver** behind M3's normalized
-      event: `kaappi-http` server endpoint, HMAC-SHA256 verification of the
+- [ ] Webhook receiver as the **second event driver** behind M4's
+      normalized event: `kaappi-http` server endpoint, HMAC-SHA256 verification of the
       raw body against the App's webhook secret, delivery-id
       de-duplication, body-size cap, rapid-fire edits debounced into one
       run, payloads handed onward as untrusted data. Commands and stages
       are unchanged by its arrival — that is the test. Public inbound
-      surface, behind a reverse proxy with TLS (M7 provisions it).
+      surface, behind a reverse proxy with TLS (M8 provisions it).
 - [ ] Stale-approval rule enforced: a new commit clears every downstream
       workflow label, so `ready-for-merge` cannot outlive the head that
       earned it.
@@ -211,14 +230,14 @@ comment; a third is tier 2 and waits for a human.
 - [ ] Fix: consume findings on mesthiri-authored PRs, push fixes, re-run
       tests, bounded iteration depth, then hand to a human.
 
-## M6 — Prioritize + Retro
+## M7 — Prioritize + Retro
 
 - [ ] Prioritize: rank triaged issues into the ready queue (target's own
       rubric first, RICE fallback), on a cron cadence.
 - [ ] Retro: mine pipeline runs for timings/iteration/failure patterns;
       file improvement proposals as issues on mesthiri itself.
 
-## M7 — Deployment hardening
+## M8 — Deployment hardening
 
 - [ ] Single binary via `zig build -Dbundle-src=mesthiri.scm`; systemd
       unit + timer files under `deploy/`.
@@ -233,7 +252,7 @@ comment; a third is tier 2 and waits for a human.
 
 ## Later / explicitly deferred
 
-- Concurrent agent runs (a worker pool), justified by real M6 retro timings
+- Concurrent agent runs (a worker pool), justified by real M7 retro timings
   rather than by anticipation.
 - Stronger isolation than namespaces (microVM per run) if the threat model
   or the target set outgrows a single-operator droplet.
@@ -269,13 +288,13 @@ comment; a third is tier 2 and waits for a human.
 - **Containment is Linux-only**: development on macOS runs the agent
   uncontained. The startup warning is load-bearing; a silent fallback here
   would be worse than no sandbox at all, because it would look safe.
-- **Command latency before M5**: commands arrive by polling until the
+- **Command latency before M6**: commands arrive by polling until the
   webhook driver lands, so `/implement` responds on the poll interval, not
   in seconds. Acceptable; worth saying out loud so it is not mistaken for a
   bug.
-- **Public inbound surface**: M5's webhook endpoint is the first thing
+- **Public inbound surface**: M6's webhook endpoint is the first thing
   mesthiri exposes to the internet. Signature verification, body-size caps,
-  and delivery de-duplication are part of M5's definition of done, not
+  and delivery de-duplication are part of M6's definition of done, not
   hardening to add afterwards.
 - **Rubric drift**: mesthiri consumes target-repo rubrics; a rubric change
   upstream silently changes behavior — the triage verdict records the

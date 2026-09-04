@@ -2,7 +2,7 @@
 
 Autonomous development-lifecycle agents (triage → prioritize → code →
 review → fix → retro) for Git-hosted projects. `docs/design.md` is the
-design authority; `docs/plan.md` sequences it into milestones (M0–M7 —
+design authority; `docs/plan.md` sequences it into milestones (M0–M8 —
 check its boxes as work lands, and route scope changes through design.md
 first); `README.md` is the public face. Keep all three in sync with
 reality — this repo has no code yet, and the README must keep saying so
