@@ -69,7 +69,7 @@ Everything here runs locally against fixtures and nothing touches CI yet.
 The modules can be built and tested immediately; only the demo waits on M0's
 App registration, since minting a real token is the whole point of it.
 
-- [ ] `lib/mesthiri/config.sld` — reads `.mesthiri/config.scm` with
+- [x] `lib/mesthiri/config.sld` — reads `.mesthiri/config.scm` with
       `read`: rubric path, budgets, path denylist, command permissions,
       pinned agent version, reader/writer App IDs as
       `(apps (reader <id>) (writer <id>))`, exactly one `operator:`
@@ -77,14 +77,14 @@ App registration, since minting a real token is the whole point of it.
       installed in. Validation refuses triage with no rubric path, a code
       stage with no denylist or operator, and any run with no App IDs. The
       guide's sample config is the scaffold contract `install` produces.
-- [ ] `lib/mesthiri/event.sld` — the normalized event, built from the CI
+- [x] `lib/mesthiri/event.sld` — the normalized event, built from the CI
       environment and the forge payload the shim passes through. One shape
       for issue, comment, PR, review and schedule events.
-- [ ] `lib/mesthiri/trigger.sld` — the s-expression predicate language over
+- [x] `lib/mesthiri/trigger.sld` — the s-expression predicate language over
       a normalized event, **interpreted over a fixed vocabulary, never
       `eval`ed**. A test asserts that a config attempting to call an
       arbitrary procedure is rejected rather than run.
-- [ ] `lib/mesthiri/jwt.sld` — App JWT: base64url in Scheme (kaappi core
+- [x] `lib/mesthiri/jwt.sld` — App JWT: base64url in Scheme (kaappi core
       does not export base64), signature from one-shot
       `openssl dgst -sha256 -sign` over `run-process`, input on stdin, key
       as a file path. Tested by verifying the signature back with
@@ -99,14 +99,14 @@ App registration, since minting a real token is the whole point of it.
       of which a signature needs `'bytevector` because it is binary.
       base64url needs no SRFI — plain `quotient`/`modulo` is enough, though
       `(srfi 151)` is available if the bit operations read better.
-- [ ] `lib/mesthiri/forge.sld` — GitHub REST client over `kaappi-http` +
+- [x] `lib/mesthiri/forge.sld` — GitHub REST client over `kaappi-http` +
       `kaappi-json`: issues, comments, labels, pulls, reviews, permission
       lookup. `http-request` takes `(method url headers body)`, so arbitrary
       methods and headers are available and `PATCH` needs no helper —
       checked, because GitHub uses it for issues and labels. Credential providers behind one interface: installation token
       from `jwt.sld` in deployment, PAT locally. Pagination and rate-limit
       handling here and nowhere else.
-- [ ] `lib/mesthiri/log.sld` — every line carries stage, repo and run URL.
+- [x] `lib/mesthiri/log.sld` — every line carries stage, repo and run URL.
 
 **Demo:** `mesthiri whoami` mints a real installation token from the App key
 and prints which installation it is, the permissions it holds and the
