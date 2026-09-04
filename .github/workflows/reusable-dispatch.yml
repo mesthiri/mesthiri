@@ -8,7 +8,10 @@ name: reusable-dispatch
 on:
   workflow_call:
     secrets:
-      reader-key: { required: true }
+      # Optional, and checked at run time instead: an inheriting shim
+      # supplies MESTHIRI_READER_KEY below rather than this, and a required
+      # secret nothing is named fails the run before any job starts.
+      reader-key: { required: false }
       writer-key: { required: false }
       model-key:  { required: false }
       # `secrets: inherit` hands the caller's secrets over under THEIR names,
@@ -181,6 +184,22 @@ jobs:
             } >> "$GITHUB_ENV"
             echo "exported $name"
           done
+
+      # Declared-optional above so either shim shape works, so the check
+      # that one of them actually arrived belongs here.
+      - name: Check the App keys arrived
+        env:
+          READER: ${{ secrets.reader-key || secrets.MESTHIRI_READER_KEY }}
+          WRITER: ${{ secrets.writer-key || secrets.MESTHIRI_WRITER_KEY }}
+        run: |
+          if [ -z "${READER:-}" ]; then
+            echo "::error::no reader App key. Pass reader-key, or add"\
+                 "MESTHIRI_READER_KEY as a repository secret and use"\
+                 "'secrets: inherit' in your shim."
+            exit 1
+          fi
+          [ -n "${WRITER:-}" ] || echo "::warning::no writer App key: stages that push will fail"
+          echo "App keys present"
 
       - name: Dispatch
         env:
