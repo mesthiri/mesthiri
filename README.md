@@ -17,8 +17,10 @@ subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
 — native `(kaappi process)` support — which **shipped in Kaappi v0.26.0**
 (all four phases; the KEP is Final). mesthiri therefore requires
-**Kaappi ≥ 0.26** and builds directly on `spawn-process`/`run-process`;
-implementation starts with the triage stage.
+**Kaappi ≥ 0.26** and builds directly on `spawn-process`/`run-process`.
+[docs/plan.md](docs/plan.md) sequences the work: agent integration first,
+then triage — the triage stage's job is verifying an issue's claims against
+the code, and that needs the agent underneath it.
 
 ## The pipeline
 
@@ -35,12 +37,15 @@ implementation starts with the triage stage.
 
 A single Kaappi program, compiled to a standalone binary
 (`zig build -Dbundle-src=`), running under systemd on a server. Fibers +
-reactor timers drive the cron stages; worker fibers drive a headless coding
+reactor timers drive the cron stages; a worker fiber drives a headless coding
 agent — [pi](https://pi.dev/) first, via its `--rpc` JSON-over-stdio mode —
-in isolated clones; pipeline state lives in SQLite; the forge is reached
-through its REST API. Guardrails are structural: agents open PRs and never
-merge, commits are signed off, issue text is treated as untrusted input, and
-every agent run has a token/turn budget and a kill-the-tree timeout.
+in isolated clones, one run at a time; pipeline state lives in SQLite. The
+forge is reached through its REST API, authenticated as a GitHub App you
+register and install on your own repos, and PR events arrive as webhooks at
+the service's own receiver. Guardrails are structural: the App has no merge
+permission, commits are signed off, issue text is treated as untrusted
+input, and every agent run has a token/turn budget and a kill-the-tree
+timeout.
 
 ## Principles
 
@@ -53,6 +58,8 @@ every agent run has a token/turn budget and a kill-the-tree timeout.
 4. **Budgets everywhere.** Per-run and per-night caps on agent spend.
 5. **Bring your own agent.** The coding agent is a subprocess speaking a
    small protocol; pi is the first backend, not the only possible one.
+6. **Self-hosted.** You run the service and hold its credentials. There is
+   no hosted mesthiri to sign up for.
 
 ## License
 
