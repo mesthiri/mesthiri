@@ -21,8 +21,8 @@ precedent of fullsend.sh's six-stage pipeline, but is:
   repos; there is no hosted multi-tenant service, no cloud sandbox
   provider, and no vendor to enroll with;
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
-  libraries (`kaappi-http`, `kaappi-json`, `kaappi-sqlite`, `kaappi-crypto`,
-  `kaappi-log`, `kaappi-cli`, fibers);
+  libraries (`kaappi-http`, `kaappi-json`, `kaappi-sqlite`, `kaappi-log`,
+  `kaappi-cli`, fibers);
 - **agent-agnostic**: the coding agent is a subprocess speaking JSON over
   stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`,
   MIT-licensed, minimal harness); the interface is small enough that other
@@ -96,10 +96,17 @@ installation is scoped to selected repositories.
   behind `forge.sld`'s **credential provider** interface, so a personal
   access token provider remains available for local development and
   fixture work without stage code knowing the difference.
-- **Ecosystem dependency**: RS256 signing does not exist in the Kaappi
-  ecosystem yet — `kaappi-crypto` currently exports digests and HMACs only.
-  It gains RSA signing upstream (OpenSSL is already linked there), and
-  mesthiri's App auth depends on that landing.
+- **How the signature is made**: RS256 does not exist in the Kaappi
+  ecosystem, and mesthiri does not add it. The signing input goes over
+  stdin to a one-shot `openssl dgst -sha256 -sign` through the same
+  `run-process` path that already drives `git` and `gh` — the key is passed
+  as a file path, never on argv, and never leaves the host. Base64url is
+  about twenty-five lines of Scheme, since kaappi core does not export
+  base64 either. That is the whole of it: no `kaappi-crypto` dependency, no
+  cross-repo release on the critical path, and one more binary to have
+  installed. OpenSSL is already a system dependency here — `kaappi-net`
+  links it for TLS — so this asks for the CLI that normally ships beside
+  the library rather than for anything new.
 - **Events**: found by polling, not delivered. A cursor per target and per
   event class (issues, issue comments, pulls, reviews) advances on a
   watermark; conditional requests carry the previous `ETag`, so an

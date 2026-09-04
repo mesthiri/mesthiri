@@ -15,8 +15,8 @@ each milestone ends in something *demonstrable*, not a pile of modules.
 
 ## M0 — Project setup and recon
 
-Two of these are human-only; one is in another repo. Start them first,
-because M1 and M2 each block on one.
+Only the App registration needs a human at a keyboard; the rest is ordinary
+setup. Do the pi recon early regardless — M2 is written from what it finds.
 
 - [x] Repo seeded: README, design.md, CLAUDE.md, kaappi.pkg, MIT license
 - [x] Design unblocked: kaappi v0.26.0 shipped KEP-0022; shim plan removed
@@ -27,12 +27,6 @@ because M1 and M2 each block on one.
       listens), so there is no webhook secret to generate or hold; generate
       and store the private key. No machine account, ToS acceptance, or 2FA
       enrolment is needed — the App acts as `mesthiri[bot]`.
-- [ ] **RS256 in `kaappi-crypto`** (other repo, blocks M1): the ecosystem
-      has digests and HMACs only, and App auth needs an RS256-signed JWT.
-      Add RSA sign/verify over OpenSSL's `EVP_DigestSign` (OpenSSL is
-      already linked there), release, then add `kaappi-crypto` to
-      `kaappi.pkg`. File it as an issue on `kaappi/kaappi-crypto` and track
-      it here — it is a cross-repo release on mesthiri's critical path.
 - [ ] **pi recon** (blocks M2): install pi, pin the exact version in config,
       and capture its *actual* `--rpc` frame schema — a handshake, a tool
       call, a completion, an error — into `docs/pi-rpc.md` plus a recorded
@@ -51,10 +45,16 @@ because M1 and M2 each block on one.
 
 ## M1 — Foundations: forge, store, config
 
-The plumbing every stage shares. No agent, no writes to any forge yet.
-Blocked on M0's `kaappi-crypto` release for the App credential provider —
-the PAT provider is written first so the rest of M1 can proceed meanwhile.
+The plumbing every stage shares. No agent, no writes to any forge yet, and
+nothing outside this repo to wait on.
 
+- [ ] `lib/mesthiri/jwt.sld` — App JWT minting: base64url in Scheme (kaappi
+      core does not export base64), signature from a one-shot
+      `openssl dgst -sha256 -sign` over `run-process` with the signing
+      input on stdin and the key as a file path, never on argv. Tested
+      against a fixture key by verifying the signature back with
+      `openssl dgst -verify`, so the test proves the JWT rather than
+      trusting the recipe.
 - [ ] `lib/mesthiri/forge.sld` — GitHub REST client over `kaappi-http` +
       `kaappi-json`: issues (list/get/comment/label), pulls
       (create/list/get), repos. Takes a **credential provider** ("token for
@@ -67,8 +67,8 @@ the PAT provider is written first so the rest of M1 can proceed meanwhile.
 - [ ] `lib/mesthiri/store.sld` — `kaappi-sqlite` schema: issues seen +
       cursor, triage verdicts (with intent tier), queue claims, pipeline
       runs (stage timings, spend, outcome), poll cursors and `ETag`s, ids
-      already handled, workflow label transitions, retro facts. Migrations as numbered
-      scripts run at startup.
+      already handled, workflow label transitions, retro facts. Migrations
+      as numbered scripts run at startup.
 - [ ] `lib/mesthiri/config.sld` — one config file (targets and their rubric
       paths, App id / key path, poll intervals per event class, budgets,
       cadences, pinned pi version, per-target **path denylist**, command
@@ -241,8 +241,9 @@ comment; a third is tier 2 and waits for a human.
 
 - [ ] Single binary via `zig build -Dbundle-src=mesthiri.scm`; systemd
       unit + timer files under `deploy/`.
-- [ ] Server provisioning notes (a small DO droplet suffices); `bwrap`
-      present and unprivileged user namespaces enabled; the agent's
+- [ ] Server provisioning notes (a small DO droplet suffices); `openssl`,
+      `git` and `gh` on `PATH`; `bwrap` present and unprivileged user
+      namespaces enabled; the agent's
       unprivileged uid; **no inbound ports** — the droplet needs no
       hostname, no TLS termination and no reverse proxy, and its firewall
       can deny inbound entirely; secrets layout (App private key on disk,
@@ -255,6 +256,10 @@ comment; a third is tier 2 and waits for a human.
 
 - Concurrent agent runs (a worker pool), justified by real M7 retro timings
   rather than by anticipation.
+- RSA signing in `kaappi-crypto`. Still worth having in the ecosystem, and
+  mesthiri would drop the `openssl` subprocess for it the day it lands —
+  but it is no longer mesthiri's blocker, and adding a feature to another
+  repo in order to unblock this one was the wrong shape for a dependency.
 - A webhook receiver. Considered and rejected, not postponed — design.md
   records why. Revisit only if a target appears where poll latency is
   genuinely unacceptable, and price the public endpoint honestly when you
@@ -275,11 +280,11 @@ comment; a third is tier 2 and waits for a human.
 
 ## Risks / reality checks
 
-- **Cross-repo blocker**: M1's App credential provider cannot ship until
-  `kaappi-crypto` gains RS256 and cuts a release. If that stalls, M1 lands
-  on the PAT provider and the App provider follows — the interface makes
-  that a swap, not a rewrite, but the plan is not done until the App path
-  works.
+- **`openssl` is a deploy dependency**: JWT signing shells out to it, so a
+  host without the CLI fails at authentication — the least helpful place to
+  discover a missing binary. Startup checks for it and refuses to start
+  without it, and M8's provisioning notes list it. The library is already
+  required by `kaappi-net` for TLS; this asks for the CLI beside it.
 - **Unvalidated backend**: pi's RPC schema is assumed until M0's recon
   captures it. If it differs materially from what `agent.sld` was sketched
   around, M2 grows.

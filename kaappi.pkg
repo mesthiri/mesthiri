@@ -1,3 +1,3 @@
 name: mesthiri
-depends: kaappi-cli kaappi-json kaappi-log kaappi-net kaappi-http kaappi-sqlite kaappi-crypto
+depends: kaappi-cli kaappi-json kaappi-log kaappi-net kaappi-http kaappi-sqlite
 source: https://github.com/mesthiri/mesthiri
