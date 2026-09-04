@@ -11,6 +11,13 @@ on:
       reader-key: { required: true }
       writer-key: { required: false }
       model-key:  { required: false }
+      # `secrets: inherit` hands the caller's secrets over under THEIR names,
+      # so a shim that inherits cannot satisfy `reader-key` — nothing is
+      # called that. Both spellings are accepted and both are optional: a
+      # shim that maps explicitly keeps working, and one that inherits
+      # supplies these instead. Exactly one pair will be set.
+      MESTHIRI_READER_KEY: { required: false }
+      MESTHIRI_WRITER_KEY: { required: false }
     inputs:
       # Shell run in the job before dispatch, for whatever the TARGET
       # repository's own tests need — its compiler, its interpreter, its
@@ -177,8 +184,8 @@ jobs:
 
       - name: Dispatch
         env:
-          MESTHIRI_READER_KEY: ${{ secrets.reader-key }}
-          MESTHIRI_WRITER_KEY: ${{ secrets.writer-key }}
+          MESTHIRI_READER_KEY: ${{ secrets.reader-key || secrets.MESTHIRI_READER_KEY }}
+          MESTHIRI_WRITER_KEY: ${{ secrets.writer-key || secrets.MESTHIRI_WRITER_KEY }}
           MESTHIRI_MODEL_KEY: ${{ secrets.model-key }}
           MESTHIRI_EVENT_NAME: ${{ github.event_name }}
           MESTHIRI_EVENT_PATH: ${{ github.event_path }}
