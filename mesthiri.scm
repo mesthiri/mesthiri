@@ -153,7 +153,11 @@
         (display (string-append "::add-mask::" tok)) (newline)
         (let ((g (make-forge http-transport)))
           (forge-auth! g (bearer tok))
-          (values g cfg))))))
+          ;; The token comes back too. It used to be minted and dropped, so
+          ;; MESTHIRI_WRITER_TOKEN — which the code stage read to clone and
+          ;; push with — was never set by anything, and the push had no
+          ;; credential at all.
+          (values g cfg tok))))))
 
 ;; --- idempotency ---------------------------------------------------------
 ;;
@@ -366,9 +370,19 @@
          (model (harness-model hn))
          (trace (string-append (or (env "RUNNER_TEMP") "/tmp")
                                "/mesthiri-trace-code-" (number->string number) ".jsonl"))
-         (token (env "MESTHIRI_WRITER_TOKEN")))
+         ;; The writer App, minted here rather than read from an environment
+         ;; variable nothing sets. Contents and pull-requests write live on
+         ;; this App and nowhere else; the reader that dispatch runs on cannot
+         ;; push or open anything.
+         (wf (call-with-values (lambda () (authed-forge 'writer))
+                               (lambda (f c t) (cons f t))))
+         (writer (car wf))
+         (token-file (string-append (or (env "RUNNER_TEMP") "/tmp")
+                                    "/mesthiri-push-" (number->string number))))
     (proc-run (list "rm" "-rf" workdir))
-    (git-clone (string-append "https://github.com/" repo) workdir token)
+    (call-with-output-file token-file (lambda (p) (write-string (cdr wf) p)))
+    (proc-run (list "chmod" "600" token-file))
+    (git-clone (string-append "https://github.com/" repo) workdir token-file)
     (git-branch workdir (branch-name-for number))
     (let* ((title (let ((t (assoc "title" issue))) (and t (cdr t))))
            (body  (let ((b (assoc "body" issue))) (and b (cdr b))))
@@ -419,14 +433,17 @@
                                                  (or (env "MESTHIRI_RUN_URL") "-")))
                         (config-operator-name config)
                         (config-operator-email config))
-            (git-push workdir (branch-name-for number))
-            (forge-post forge (string-append "/repos/" repo "/pulls")
+            (git-push workdir (branch-name-for number) token-file)
+            ;; The writer opens the pull request. Dispatch runs on the reader,
+            ;; which has no pull-requests write and would be refused here.
+            (forge-post writer (string-append "/repos/" repo "/pulls")
                         (json-write-string
                          (list (cons "title" (string-append "Fix #" (number->string number)))
                                (cons "head" (branch-name-for number))
                                (cons "base" "main")
                                (cons "body" (pr-body number summary
                                                      (or (env "MESTHIRI_RUN_URL") "-"))))))
+            (proc-run (list "rm" "-f" token-file))
             (log-info "code: pull request opened")))))))))
 
 ;; Review runs on pull requests mesthiri opened, plus an explicit /review.
@@ -578,7 +595,7 @@
 (define (cmd-dispatch args)
   (let ((ev (load-event)))
     (log-context! "dispatch" (event-repo ev) (env "MESTHIRI_RUN_URL"))
-    (let-values (((forge cfg) (authed-forge 'reader)))
+    (let-values (((forge cfg tok) (authed-forge 'reader)))
       (let* ((handlers (list (cons 'triage triage-handler)
                              (cons 'prioritize prioritize-handler)
                              (cons 'code code-handler)

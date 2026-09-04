@@ -91,6 +91,36 @@
 (check "and an untracked one is too, because add -A will commit it"
        #t (and (member "sub/stray.log" seen) #t))
 
+;; --- the push credential never lands where the agent can read it ---------
+;;
+;; It used to be embedded in the clone URL, which git writes into the clone's
+;; own .git/config — and the clone is the directory the agent then runs in
+;; with read tools. The credential the whole design keeps away from the agent
+;; would have been sitting in its working directory.
+(define cdir "/tmp/mesthiri-git-cred")
+(define _c1 (proc-run (list "rm" "-rf" cdir)))
+(define _c2 (proc-run (list "mkdir" "-p" cdir)))
+(define tokfile "/tmp/mesthiri-git-cred-token")
+(define _c3 (call-with-output-file tokfile
+              (lambda (p) (display "ghs_notarealtoken" p))))
+;; A bare local repo to clone from, so this exercises the real code path.
+(define _c4 (proc-run (list "git" "init" "-q" "--bare" (string-append cdir "/origin.git"))))
+(define _c5 (guard (e (#t #f))
+              (git-clone (string-append cdir "/origin.git")
+                         (string-append cdir "/work") tokfile)))
+(define cfgtext
+  (guard (e (#t ""))
+    (call-with-input-file (string-append cdir "/work/.git/config")
+      (lambda (p) (let loop ((acc ""))
+                    (let ((c (read-char p)))
+                      (if (eof-object? c) acc (loop (string-append acc (string c))))))))))
+(check "the clone succeeded" #t (> (string-length cfgtext) 0))
+(check "and its .git/config holds no token"
+       #f (has? cfgtext "ghs_notarealtoken"))
+;; The rule this project states: secrets travel as paths or on stdin.
+(check "the token is passed as a path, not a value"
+       #t (has? cfgtext "origin.git"))
+
 (newline)
 (display "  ") (display pass) (display " passed, ") (display fail) (display " failed") (newline)
 (if (> fail 0) (exit 1) (exit 0))

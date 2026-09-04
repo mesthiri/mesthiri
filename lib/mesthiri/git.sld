@@ -18,18 +18,30 @@
     (define (git dir . args)
       (proc-run/string (append (list "git" "-C" dir) args)))
 
-    ;; A shallow clone of the default branch, authenticated by embedding the
-    ;; installation token in the remote. Tokens are short-lived and the clone
-    ;; is discarded with the job.
-    (define (git-clone url dir token)
+    ;; A shallow clone of the default branch.
+    ;;
+    ;; The token reaches git through a credential helper reading a FILE, not
+    ;; through the URL. Embedding it in the remote — which is what this used
+    ;; to do — writes it into the clone's `.git/config`, and the clone is the
+    ;; directory the agent then runs in with read tools: the credential the
+    ;; whole design keeps away from the agent would be sitting in its working
+    ;; directory. It is not in argv either, per this project's rule that
+    ;; secrets travel as paths or on stdin; only the path is.
+    (define (git-clone url dir token-file)
       (proc-run/string
-       (list "git" "clone" "--depth" "1"
-             (if token (with-token url token) url) dir)))
+       (append (list "git")
+               (credential-args token-file)
+               (list "clone" "--depth" "1" url dir))))
 
-    (define (with-token url token)
-      ;; https://x-access-token:<token>@github.com/owner/repo
-      (let ((rest (after "https://" url)))
-        (string-append "https://x-access-token:" token "@" rest)))
+    ;; `git -c credential.helper=` first, to discard any helper the host has
+    ;; configured rather than adding to it.
+    (define (credential-args token-file)
+      (if token-file
+          (list "-c" "credential.helper="
+                "-c" (string-append
+                      "credential.helper=!f(){ echo username=x-access-token; "
+                      "echo password=\"$(cat " token-file ")\"; };f"))
+          '()))
 
     (define (after prefix s)
       (if (and (>= (string-length s) (string-length prefix))
@@ -57,7 +69,13 @@
              "-c" (string-append "user.email=" operator-email)
              "commit" "-m" (commit-message subject body))))
 
-    (define (git-push dir branch) (git dir "push" "origin" branch))
+    ;; Same discipline as the clone: the credential is a file the helper
+    ;; reads, and the agent has exited by the time this runs.
+    (define (git-push dir branch token-file)
+      (proc-run/string
+       (append (list "git" "-C" dir)
+               (credential-args token-file)
+               (list "push" "origin" branch))))
 
     ;; Everything `git add -A` would commit, which is what the deny-paths
     ;; check has to inspect — so untracked files too, not just modified
