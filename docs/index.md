@@ -1,6 +1,6 @@
 ---
 template: home.html
-title: mesthiri
+title: A foreman for your repository
 hide:
   - navigation
   - toc
