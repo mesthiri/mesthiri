@@ -26,19 +26,17 @@ changing it at all:
 mesthiri try owner/repo --rubric docs/dev/github-issues.md
 ```
 
-That reads your open issues with a personal access token, runs triage
-locally, and prints the verdicts to your terminal. It writes nothing —
-no labels, no comments, no branches. If the verdicts look wrong, you have
-learned that for the price of one command, and the rubric is usually what
-needs fixing rather than mesthiri.
+That reads your open issues with a personal access token, applies your
+rubric to each one, and prints the result. It writes nothing — no labels,
+no comments, no branches — and it does not clone your repository.
 
 ```
-mesthiri try — read-only, nothing will be written
+mesthiri try — rubric only, nothing written, no checkout
 
 #412  Segfault when parsing empty vectors
       priority: high     tier 1     rubric §2
-      Reproduced against 8c697da. The reporter blames the reader; the
-      crash is in vector-ref bounds checking, one frame further in.
+      Reproducible crash in library code. Taking the report at face
+      value: not verified against the code.
 
 #418  Add a --json flag to `kaappi features`
       priority: low      tier 2     rubric §5
@@ -49,8 +47,19 @@ mesthiri try — read-only, nothing will be written
       priority: low      tier 0     rubric §1
       One-word change, additive, trivially revertible.
 
-3 issues read, 3 verdicts, 0 writes. Spent 41k tokens (~2 minutes).
+3 issues read, 3 verdicts, 0 writes. Spent 9k tokens (~20 seconds).
 ```
+
+**This is not what installed triage does, and the difference matters.**
+Real triage checks the issue's claims against a checkout before trusting
+them — a reporter's diagnosis is a hypothesis, and a good share of them are
+wrong about where the bug is. `try` cannot do that: verifying claims means
+running a coding agent with tools against attacker-writable text, and that
+belongs in a sandbox on a CI runner, not on your laptop. So `try` calls a
+model directly with no shell, no file access and nothing to contain, and
+tells you the one thing it honestly can — **whether your rubric produces
+sane priorities**. That is usually what is wrong at the start, and it is
+worth twenty seconds to find out.
 
 ## Installing
 
@@ -133,15 +142,17 @@ not be one that unlocks anything else you own.
 mesthiri install owner/repo
 ```
 
-This opens a pull request against your repository adding two files: a shim
-workflow under `.github/workflows/`, and a starter `.mesthiri/config.scm`.
-Read it like any other pull request. Merging it is what turns mesthiri on.
+This opens a pull request against your repository adding three files: a shim
+workflow under `.github/workflows/`, a starter `.mesthiri/config.scm`, and a
+starter rubric. Read it like any other pull request. Merging it is what
+turns mesthiri on.
 
 ```
 mesthiri install — opening a pull request, changing nothing directly
 
   .github/workflows/mesthiri.yml   new    38 lines
-  .mesthiri/config.scm             new    31 lines
+  .mesthiri/config.scm             new    34 lines
+  .mesthiri/rubric.md              new    52 lines
 
 Opened owner/repo#1204.
 
@@ -149,6 +160,12 @@ Everything starts in dry-run: triage will comment its reasoning and apply
 no labels until you change one line. Nothing else runs at all until you
 enable it.
 ```
+
+The rubric is a generic starting point, and rewriting it is the highest-value
+thing you can do in your first week — every triage verdict is only as good
+as the document it is applying. It lives under `.mesthiri/`, which is on the
+default deny list, so mesthiri can never edit the rubric it is judged
+against.
 
 ### About the `pull_request_target` in that workflow
 
@@ -279,6 +296,14 @@ result is written into the run record and into the `Generated-by` trailer of
 any commit, so that six months from now a strange-looking pull request can
 be traced to what actually wrote it.
 
+**Review may not use the implementer's model.** If you declare two
+providers, review must use the other one; with a single provider, review
+must at least name a different model from the code harness, and a config
+where the two match is rejected. This is not about mesthiri approving its
+own work — it cannot, since findings are comments and no App can merge. It
+is that a reviewer running the same model shares the implementer's blind
+spots, which is precisely what you were hoping review would catch.
+
 If you use a gateway or a self-hosted endpoint, point `endpoint` at it. The
 sandbox allowlist follows from that value, so there is no second place to
 update and no way for the two to disagree.
@@ -336,6 +361,16 @@ Your own permission is what counts, not mesthiri's:
 >
 > If this should go ahead, someone with write access can issue the command
 > or apply `ready-to-implement`.
+
+### Why review only runs on mesthiri's pull requests
+
+Review does not fire on pull requests other people open, and that is a
+spend gate rather than a judgement about your contributors. The shim
+subscribes to `pull_request_target`, which fires for fork pull requests too
+— so reviewing everything would let anyone who can open a pull request start
+an agent run on your budget. Fifty pull requests, fifty runs. Until there is
+a spend gate worth trusting, review stays on the loop mesthiri owns; you can
+always ask for one with `/review`, which is permission-checked.
 
 ## What a mesthiri pull request looks like
 

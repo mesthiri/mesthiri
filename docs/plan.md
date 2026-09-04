@@ -171,10 +171,13 @@ cannot reach a host off the allowlist.
       labels and update times** rather than keeping a cursor. Labels are the
       watermark; mesthiri stores nothing a human cannot see in the repo.
 
-- [ ] `mesthiri try <owner/repo>` — run triage locally against a PAT and
-      print verdicts, writing nothing at all. The on-ramp the guide leads
-      with: installation asks for two Apps and a pull request, and this
-      lets someone judge the verdicts before paying any of that.
+- [ ] `mesthiri try <owner/repo>` — apply the rubric to open issues from a
+      PAT and print the result, writing nothing and cloning nothing. It
+      calls a model **directly, with no agent subprocess**: verifying an
+      issue's claims needs tools against attacker-writable text, which
+      belongs in a sandbox on a runner rather than on someone's laptop. So
+      it answers the narrower question honestly — does this rubric produce
+      sane priorities — and says in its output that claims are unverified.
 
 **Demo:** scheduled dry-run triage on kaappi/kaappi that the org owner
 spot-checks; going live is a config change. Separately, `mesthiri try`
@@ -226,6 +229,13 @@ third at tier 2 waiting for a human.
 
 ## M7 — Review and Fix
 
+- [ ] Review fires only on pull requests **mesthiri opened**, plus explicit
+      `/review`. `pull_request_target` fires for fork PRs, so reviewing
+      everything lets anyone who can open one spend the repo's budget; the
+      per-day cap is approximate and not a defence.
+- [ ] The review harness must not match the code harness: the other
+      provider where two are declared, otherwise a different model. A
+      config where they match is rejected at load.
 - [ ] Review on `pull_request_target` and `pull_request_review`: per-
       dimension passes (correctness, security, performance, intent), each
       re-deriving the intent tier from the diff independently; adversarial
@@ -259,8 +269,10 @@ stage that spent its budget without reaching green.
 
 ## M9 — Installation and distribution
 
-- [ ] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` and the shim
-      workflow as a pull request, in ordered layers that install forward,
+- [ ] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
+      a **starter rubric**, since most repos have none and "first write a
+      policy document" is a poor first five minutes) and the shim workflow
+      as a pull request, in ordered layers that install forward,
       uninstall in reverse, and report status. The layering idea is
       fullsend's ADR 0006.
 - [ ] Release automation: build the standalone binary for Linux x86_64 and
@@ -282,6 +294,9 @@ Uninstall reverses it and leaves no trace but the labels.
 
 ## Later / explicitly deferred
 
+- Reviewing pull requests mesthiri did not open, behind a spend gate worth
+  trusting. Useful, and not safe while the only brake is an approximate
+  per-day cap on a trigger any stranger can pull.
 - Vendored installs: writing the workflow and pinning the binary into the
   target repo so nothing is fetched at run time. Worth having for an adopter
   who reviews everything they run; not worth two code paths before there is

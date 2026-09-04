@@ -92,10 +92,17 @@ matching stage in that job. One event, one stage, one job.
 2. **Prioritize** (scheduled): rank triaged issues into a ready queue.
 3. **Code** (label or command): implement, run the *project's own* test
    command, open a PR. One issue, one PR.
-4. **Review** (PR events): correctness, security, performance and intent
-   alignment as independent passes; findings verified adversarially before
-   posting, because a finding that cannot survive a refutation attempt is
-   noise.
+4. **Review** (PR events, **on pull requests mesthiri opened**):
+   correctness, security, performance and intent alignment as independent
+   passes; findings verified adversarially before posting, because a finding
+   that cannot survive a refutation attempt is noise.
+
+   The restriction is a spend gate, not modesty. `pull_request_target` fires
+   for fork pull requests, so reviewing every incoming PR would let anyone
+   who can open one start an agent run — fifty pull requests, fifty runs —
+   with only an approximate per-day cap in the way. Reviewing other people's
+   pull requests is a genuinely useful thing to want and is listed under
+   Later, behind a spend gate worth trusting.
 5. **Fix** (review findings): apply, push, re-run tests, to a bounded depth,
    then hand to a human.
 6. **Retro** (scheduled): mine completed runs for timings, iteration counts
@@ -155,6 +162,16 @@ maintainer who expected YAML.
   allowed tools, which provider and model, effort, budgets, sandbox policy.
   A role is configured in one reviewable file rather than scattered across
   workflow YAML, which is fullsend's harness idea (their ADR 0024).
+
+**The reviewer must not be the implementer.** Where two providers are
+declared, the review harness must use the other one; where only one is,
+review must at least name a different model from the code harness, and a
+config where they match is rejected. Nothing here is about mesthiri
+approving its own work — it cannot, since findings are comments and no App
+can merge. It is that a reviewer sharing the implementer's model shares its
+blind spots, and a blind spot is exactly what adversarial verification is
+supposed to catch. The `providers` block exists partly to make this
+affordable.
 
 **Harnesses have defaults.** mesthiri ships a harness for every role, so a
 repository works with a `config.scm` and nothing else; nobody should have to
@@ -355,8 +372,16 @@ Triage rubrics live **in the target repository**, at a path named in
 `.mesthiri/config.scm` — the first target is the kaappi org's
 `docs/dev/github-issues.md`. mesthiri consumes the rubric a project already
 maintains rather than authoring policy for projects it does not run. A
-target with no rubric file is not eligible for triage, and that is a
-configuration error rather than a silent fallback. Every verdict records the
+config naming a rubric that does not exist is a startup error rather than a
+silent fallback.
+
+Most repositories have no such document, though, and "first write a policy
+document" is a poor first five minutes. So `install` writes a **starter
+rubric** into `.mesthiri/rubric.md` as part of its pull request — generic,
+plainly marked as a starting point, and yours to rewrite from the moment it
+lands. That keeps the non-goal intact: mesthiri consumes a rubric the
+repository owns, and it owns this one too. `.mesthiri/**` is on the default
+deny list, so mesthiri can never edit the rubric it is judged against. Every verdict records the
 rubric's commit SHA, so an upstream rubric change reads as a behaviour
 change instead of a mystery.
 
