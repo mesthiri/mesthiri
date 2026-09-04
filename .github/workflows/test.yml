@@ -28,8 +28,40 @@ env:
   PI_VERSION: 0.84.4
 
 jobs:
+  # Two legs, one for each spawn path (#5): the pinned kaappi v0.26.1 Linux
+  # binary refuses spawn-process directory: on every Linux host
+  # (kaappi#2517), so on ubuntu the live agent test can only run through
+  # the /bin/sh fallback; macOS honours directory:, so its leg is where the
+  # primary spawn path runs against a real pi. When kaappi#2517 ships and
+  # KAAPPI_VERSION is bumped, both legs run the primary path, and the
+  # fallback keeps its unit checks on every platform (tests/test-agent.scm
+  # runs the script for real).
+  #
+  # `name:` comes from the matrix on purpose. With it, GitHub reports each
+  # leg's check context verbatim — `suite` and `suite-macos`. With the
+  # default name a matrix reports `suite (ubuntu-latest)` instead, the
+  # plain `suite` context branch protection requires never reports again,
+  # and every merge is back to needing --admin — the failure #5 was filed
+  # about.
+  #
+  # Only `suite` is in that rule. `suite-macos` is deliberately not required
+  # yet: a required context that has never reported blocks merges exactly
+  # like a failing one. Require it from branch protection once it has run
+  # green on main.
   suite:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # A macOS failure must not cancel the required leg.
+      fail-fast: false
+      matrix:
+        include:
+          - name: suite          # the required check's context — keep exact
+            runner: ubuntu-latest
+            artifact: kaappi-x86_64-linux
+          - name: suite-macos
+            runner: macos-latest # arm64; the artifact is pinned to match
+            artifact: kaappi-aarch64-macos
     steps:
       - uses: actions/checkout@v5
 
@@ -37,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL -o kaappi \
-            "https://github.com/kaappi/kaappi/releases/download/${KAAPPI_VERSION}/kaappi-x86_64-linux"
+            "https://github.com/kaappi/kaappi/releases/download/${KAAPPI_VERSION}/${{ matrix.artifact }}"
           chmod +x kaappi
           sudo mv kaappi /usr/local/bin/kaappi
           kaappi --version
@@ -48,7 +80,10 @@ jobs:
           git clone --depth 1 https://github.com/kaappi/kaappi-json ../kaappi-json
 
       # openssl signs the App JWT; present on every standard image, but the
-      # jwt tests are the ones that would fail confusingly without it.
+      # jwt tests are the ones that would fail confusingly without it. This
+      # prints whichever openssl the default PATH resolves to — on macOS
+      # that is Homebrew's OpenSSL 3, NOT the system LibreSSL the run step
+      # below puts first for the suite itself.
       - name: Check openssl is present
         run: openssl version
 
@@ -67,7 +102,13 @@ jobs:
       # steps the reusable workflow does, and for the same reason: 24.04
       # ships kernel.apparmor_restrict_unprivileged_userns=1, under which
       # bwrap is installed and still cannot create a namespace.
+      #
+      # Linux only. On macOS there is no namespace sandbox by design and the
+      # suite asserts the loud refusal instead of failing (test-sandbox.scm
+      # checks the refusal reason); the leg runs tests, not jobs, and the
+      # live test's pi talks to a stub model server on localhost.
       - name: Install the sandbox
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -77,6 +118,18 @@ jobs:
                 --ro-bind / / --proc /proc --dev /dev -- /bin/true
           echo "bubblewrap $(bwrap --version | awk '{print $2}') works"
 
-      - run: ./tests/run-all.sh
+      - name: Run the suite
+        run: |
+          set -euo pipefail
+          # On macOS, default PATH resolves `openssl` to Homebrew's OpenSSL
+          # 3 — the same build the ubuntu leg already exercises. Put the
+          # system LibreSSL (/usr/bin/openssl) first so the jwt tests cover
+          # the second implementation; the echo beside the export is the
+          # evidence of which one the suite called.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            export PATH="/usr/bin:$PATH"
+            openssl version
+          fi
+          ./tests/run-all.sh
         env:
           MESTHIRI_LIBS: ../kaappi-json/lib
