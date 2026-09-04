@@ -26,8 +26,11 @@ humans set intent, define guardrails, and review outcomes. It is:
   plane, because it already is all three for your tests;
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
   (`kaappi-http`, `kaappi-json`, `kaappi-cli`, `kaappi-log`), and compiled
-  with `zig build -Dbundle-src=` so a target repository needs a binary, not
-  a Kaappi installation. Releases ship Linux x86_64 and arm64 for CI plus
+  compiled to a standalone binary so a target repository needs a binary, not
+  a Kaappi installation. The build is two steps rather than the obvious one:
+  `kaappi --compile` with explicit `--lib-path`s, then `zig build -Dbundle=`
+  to embed the bytecode. `-Dbundle-src=` cannot be used, because it compiles
+  with no library path and mesthiri's own modules do not resolve. Releases ship Linux x86_64 and arm64 for CI plus
   macOS arm64 for local `try` and `install` — neither of which spawns an
   agent, which is precisely why those two can run on a laptop where there
   is no sandbox to spawn one into;

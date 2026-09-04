@@ -307,7 +307,7 @@ flowchart LR
   end
   subgraph core["kaappi core, >= 0.26"]
     process["(kaappi process)<br/>KEP-0022"]
-    bundle["zig build -Dbundle-src=<br/>standalone binary"]
+    bundle["kaappi --compile<br/>then zig build -Dbundle="]
   end
   m["mesthiri"] --> kaappi
   m --> runner

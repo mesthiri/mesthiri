@@ -383,7 +383,11 @@ stage that spent its budget without reaching green.
       fullsend's ADR 0006.
 - [ ] Release automation: build the standalone binary for Linux x86_64 and
       arm64 plus macOS arm64 for local `try` and `install`, publish with
-      SHA256SUMS, and pin it in the reusable workflow. Layered
+      SHA256SUMS, and pin it in the reusable workflow. The build is
+      `kaappi --compile` with explicit `--lib-path`s followed by
+      `zig build -Dbundle=<sbc>`; `-Dbundle-src=` compiles with no library
+      path and mesthiri's modules do not resolve under it. Until this lands,
+      `.claude/skills/release` is the process, written out manually. Layered
       distribution means a fix here reaches installed repos without
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.

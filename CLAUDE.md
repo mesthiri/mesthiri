@@ -108,8 +108,14 @@ with the work rather than living in one session's head:
   and write it there. Run it when a review finds a defect, a claim turns out
   false when tested, or a decision reverses.
 
-Both end by updating themselves, which is the point: a lesson left in a
-commit message is one the next session repeats.
+- **`release`** — cut a release. Note it has two distinct halves: publishing
+  the artifacts, and separately bumping the pin in
+  `.github/workflows/reusable-dispatch.yml` that every installed repository
+  runs. A bad pin breaks everyone's next job, so the skill verifies the
+  published artifact between the two.
+
+The first two end by updating themselves, which is the point: a lesson left
+in a commit message is one the next session repeats.
 
 Skills are discovered when a session starts, so one added mid-session is not
 invokable until it registers — the file is on disk and the tool call still
