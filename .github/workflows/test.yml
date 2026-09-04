@@ -77,36 +77,6 @@ jobs:
                 --ro-bind / / --proc /proc --dev /dev -- /bin/true
           echo "bubblewrap $(bwrap --version | awk '{print $2}') works"
 
-      - name: Probe the released binary
-        shell: bash
-        run: |
-          set +e
-          base="https://github.com/mesthiri/mesthiri/releases/download/v0.1.4"
-          mkdir -p ~/.kaappi/lib probe && cd probe
-          curl -fsSL -o m "$base/mesthiri-x86_64-linux"; chmod +x m
-          curl -fsSL -o ~/.kaappi/lib/libkaappi_net.so  "$base/libkaappi_net-x86_64-linux.so"
-          curl -fsSL -o ~/.kaappi/lib/libkaappi_http.so "$base/libkaappi_http-x86_64-linux.so"
-          git clone -q --depth 1 https://github.com/mesthiri/sandbox s && cp -r s/.mesthiri .
-          cat > event.json <<'EOF'
-          {"action":"created","issue":{"number":1,"title":"t","body":"b","labels":[],"user":{"login":"x"}},"comment":{"body":"/triage","user":{"login":"x"}},"repository":{"full_name":"mesthiri/sandbox"}}
-          EOF
-          export MESTHIRI_EVENT_NAME=issue_comment MESTHIRI_EVENT_PATH=$PWD/event.json
-          export MESTHIRI_REPO=mesthiri/sandbox CI=true
-
-          echo "=== 1. the SCRIPT, same config, same event ==="
-          kaappi --lib-path ../lib --lib-path ../../kaappi-json/lib ../mesthiri.scm explain-event
-          echo "script-exit=$?"
-
-          echo "=== 2. the BUNDLE ==="
-          ./m explain-event; echo "bundle-exit=$?"
-
-          echo "=== 3. bundle with NO config present ==="
-          mv .mesthiri away; ./m explain-event; echo "no-config-exit=$?"; mv away .mesthiri
-
-          echo "=== 4. bundle, config present, no event file ==="
-          MESTHIRI_EVENT_PATH=/nonexistent ./m explain-event; echo "no-event-exit=$?"
-        continue-on-error: true
-
       - run: ./tests/run-all.sh
         env:
           MESTHIRI_LIBS: ../kaappi-json/lib
