@@ -77,31 +77,30 @@ jobs:
                 --ro-bind / / --proc /proc --dev /dev -- /bin/true
           echo "bubblewrap $(bwrap --version | awk '{print $2}') works"
 
-      # TEMPORARY: v0.1.5's dispatch died with SIGILL where v0.1.4 did not.
       - name: Probe the released binary
         shell: bash
         run: |
           set +e
-          set -x
-          sudo apt-get install -y -qq bubblewrap
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          base="https://github.com/mesthiri/mesthiri/releases/download"
-          mkdir -p ~/.kaappi/lib probe/.mesthiri/harness
-          cd probe
-          git clone --depth 1 https://github.com/mesthiri/sandbox s
-          cp -r s/.mesthiri/* .mesthiri/
+          base="https://github.com/mesthiri/mesthiri/releases/download/v0.1.4"
+          mkdir -p ~/.kaappi/lib probe && cd probe
+          curl -fsSL -o m "$base/mesthiri-x86_64-linux"; chmod +x m
+          curl -fsSL -o ~/.kaappi/lib/libkaappi_net.so  "$base/libkaappi_net-x86_64-linux.so"
+          curl -fsSL -o ~/.kaappi/lib/libkaappi_http.so "$base/libkaappi_http-x86_64-linux.so"
+          git clone -q --depth 1 https://github.com/mesthiri/sandbox s && cp -r s/.mesthiri .
           cat > event.json <<'EOF'
           {"action":"created","issue":{"number":1,"title":"t","body":"b","labels":[],"user":{"login":"x"}},"comment":{"body":"/triage","user":{"login":"x"}},"repository":{"full_name":"mesthiri/sandbox"}}
           EOF
-          for v in v0.1.4 v0.1.5; do
-            curl -fsSL -o "m-$v" "$base/$v/mesthiri-x86_64-linux"; chmod +x "m-$v"
-            curl -fsSL -o ~/.kaappi/lib/libkaappi_net.so  "$base/$v/libkaappi_net-x86_64-linux.so"
-            curl -fsSL -o ~/.kaappi/lib/libkaappi_http.so "$base/$v/libkaappi_http-x86_64-linux.so"
-            echo "===== $v ====="
-            MESTHIRI_EVENT_NAME=issue_comment MESTHIRI_EVENT_PATH=$PWD/event.json \
-            MESTHIRI_REPO=mesthiri/sandbox CI=true ./"m-$v" dispatch
-            echo "dispatch-exit=$?"
-          done
+          export MESTHIRI_EVENT_NAME=issue_comment MESTHIRI_EVENT_PATH=$PWD/event.json
+          export MESTHIRI_REPO=mesthiri/sandbox CI=true
+          echo "=== A: explain-event (no forge, no keys) ==="
+          ./m explain-event 2>&1 | tail -20; echo "exit=${PIPESTATUS[0]}"
+          echo "=== B: dispatch, no keys ==="
+          ./m dispatch > b.out 2> b.err; echo "exit=$?"; echo "--stdout"; cat b.out; echo "--stderr"; cat b.err
+          echo "=== C: dispatch with dummy keys ==="
+          MESTHIRI_READER_KEY=x MESTHIRI_WRITER_KEY=y MESTHIRI_MODEL_KEY=z \
+            ./m dispatch > c.out 2> c.err; echo "exit=$?"; echo "--stdout"; cat c.out; echo "--stderr"; cat c.err
+          echo "=== D: ulimit -c and dmesg ==="
+          ulimit -c unlimited; ./m dispatch; echo "exit=$?"
         continue-on-error: true
 
       - run: ./tests/run-all.sh
