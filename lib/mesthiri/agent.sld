@@ -339,13 +339,24 @@
     ;; it.
     ;;
     ;; The deadline is a fiber, and it has to be a fiber rather than a SRFI-18
-    ;; thread. A process object is owned by the heap that created it, and
-    ;; `process-kill` from another thread raises rather than killing: a
-    ;; watchdog thread reports that it fired, kills nothing, and the run hangs
-    ;; anyway. Fibers share the heap, so the kill is allowed — and a blocking
-    ;; `read-line` in the main fiber parks rather than stalling the scheduler,
-    ;; which is what makes the watchdog run at all. Both halves were checked
-    ;; against a real process before this was written.
+    ;; thread. A process object may only be used by the thread that spawned
+    ;; it, so `process-kill` from a watchdog thread does not kill:
+    ;;
+    ;;     process-kill: process belongs to another thread; a process may
+    ;;     only be used by the thread that spawned it
+    ;;
+    ;; Fibers share the heap, so the kill is allowed — and a blocking
+    ;; `read-line` in the main fiber parks rather than stalling the
+    ;; scheduler, which is what makes the watchdog run at all.
+    ;;
+    ;; This comment used to say that a watchdog thread "reports that it
+    ;; fired, kills nothing, and the run hangs anyway", and claimed both
+    ;; halves had been checked against a real process. The hang is right;
+    ;; the silence was ours. kaappi raises, with the sentence above — it is
+    ;; the `guard` below, which catches everything, that would have thrown
+    ;; that sentence away. Blaming a dependency for a symptom your own error
+    ;; handling produced is worth avoiding on its own, and it nearly cost
+    ;; kaappi a bug report for something it does well.
     (define (run-agent argv prompt deadline-secs budget trace-path env
                        stderr-path workdir)
       (let* ((errp (and stderr-path (open-output-file stderr-path)))
@@ -369,6 +380,13 @@
               (spawn (lambda ()
                        (thread-sleep! deadline-secs)
                        (set-car! timed-out #t)
+                       ;; Catches everything because by the time the
+                       ;; deadline fires the process has usually exited on
+                       ;; its own, and killing a dead process is not an
+                       ;; error worth propagating out of a detached fiber.
+                       ;; The cost is that a real mistake here is silent —
+                       ;; a `process-kill` from the wrong thread raises a
+                       ;; precise diagnostic and this would discard it.
                        (guard (e (#t #f)) (process-kill proc 'group: #t)))))
           (write-string (json-write-string
                          (list (cons "type" "prompt")

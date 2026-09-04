@@ -222,9 +222,11 @@ instead, and M4 replaces the handler rather than deleting a special case.
       is a list of content blocks on the assistant's message — so every real
       run would have ended at "settled without producing any text".
 
-      The deadline has to be a **fiber**, not a SRFI-18 thread: a process is
-      owned by the heap that created it, so `process-kill` from a thread
-      raises and the watchdog reports firing while killing nothing.
+      The deadline has to be a **fiber**, not a SRFI-18 thread: a process
+      may only be used by the thread that spawned it, so `process-kill` from
+      a watchdog thread raises rather than killing, and the run hangs past
+      its deadline. kaappi names the cause exactly; `agent.sld`'s own
+      catch-all `guard` around the kill is what would discard it.
 - [x] **Containment inside the runner**: namespace sandbox via
       `bwrap`/`unshare` constructed by `agent.sld` and nothing else —
       read-only root, scratch clone the only writable mount, the App key and

@@ -105,12 +105,22 @@ symlink and would overwrite everything here.
   invisible to fixtures written from the recon. Drive the real thing before
   writing code against notes about it, and when a document abbreviates a
   shape, say in the document that it is abbreviated.
-- **A deadline needs a fiber, not a SRFI-18 thread.** A kaappi process is
-  owned by the heap that created it, so `process-kill` from a thread raises:
-  the watchdog reports that it fired, kills nothing, and the run hangs
-  anyway. Fibers (`(kaappi fibers)` `spawn`) share the heap, and a blocking
-  `read-line` parks the fiber rather than stalling the scheduler, which is
-  what lets the watchdog run at all.
+- **A deadline needs a fiber, not a SRFI-18 thread.** A kaappi process may
+  only be used by the thread that spawned it, so `process-kill` from a
+  watchdog thread does not kill — the run hangs past its deadline. Fibers
+  (`(kaappi fibers)` `spawn`) share the heap, and a blocking `read-line`
+  parks the fiber rather than stalling the scheduler, which is what lets the
+  watchdog run at all.
+
+  kaappi is *loud* about this: it raises `process-kill: process belongs to
+  another thread; a process may only be used by the thread that spawned it`.
+  Say so, because this rule used to describe a watchdog that "reports that
+  it fired, kills nothing, and the run hangs anyway" — which reads as kaappi
+  failing silently. The silence was ours: `agent.sld` wraps the kill in
+  `(guard (e (#t #f)) …)`, and that discards the diagnostic. **Check whether
+  your own error handling produced a symptom before attributing it to a
+  dependency** — this one nearly cost kaappi a bug report for something it
+  does well, and the wrong version had been written down as verified.
 - Issue/PR text from target repos is untrusted input: never interpolate it
   into shell commands (argv-only) and label it as data in agent prompts.
 - **A kaappi defect goes upstream, not just into a workaround.** File it at
