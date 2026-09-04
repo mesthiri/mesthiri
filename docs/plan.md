@@ -411,7 +411,7 @@ stage that spent its budget without reaching green.
       architecture.md and the guide each described a network control that
       did not exist, and now say so instead.
 
-- [ ] **More than one model key.** The shim has a single `model-key` input
+- [x] **More than one model key.** The shim has a single `model-key` input
       and the reusable workflow exports it as one variable, so a repository
       can fund exactly one provider. That interacts badly with the rule that
       review must not run the implementer's provider *and* model: on an
@@ -420,12 +420,16 @@ stage that spent its budget without reaching green.
       `glm-5.3` is funded — every other z.ai model answers 1113
       "insufficient balance", and `code` had already claimed it.
 
-      Two ways out, and they are different decisions. Per-provider secrets
-      (`(secret GLM_API_KEY)` naming a repository secret the shim forwards
-      under that name) restores what the config already looks like it
-      promises. Or the guardrail weakens to "should differ", which is worse:
-      the whole point of adversarial verification is that the reviewer does
-      not share the implementer's blind spots.
+      Resolved by per-provider secrets rather than by weakening the
+      guardrail. The reusable workflow takes `model-secrets`, a list of
+      repository secret names, and exports only those; the caller passes
+      `secrets: inherit`, because a reusable workflow cannot receive a secret
+      whose name it does not declare and mesthiri cannot declare names that
+      belong to a target repository. `(secret …)` in a config now means what
+      it always looked like it meant.
+
+      The alternative was weakening the rule to "should differ", which gives
+      up the thing review is for.
 
 ## M9 — Installation and distribution
 

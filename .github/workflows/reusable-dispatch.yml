@@ -33,6 +33,25 @@ on:
         required: false
         type: string
         default: ""
+      # Space-separated names of repository secrets holding model API keys —
+      # the names a config's `(secret …)` fields use. The caller must also
+      # pass `secrets: inherit`, since a reusable workflow cannot receive a
+      # secret whose name it does not declare, and mesthiri cannot declare
+      # names that belong to the target repository.
+      #
+      # Only the names listed here are exported. `secrets: inherit` makes
+      # every repository secret reachable by the workflow; this step is what
+      # decides which of them become environment variables, and the
+      # maintainers write that list in their own shim.
+      #
+      # Without this a repository can fund exactly one provider, because the
+      # single `model-key` input lands in one variable. That collides with
+      # the rule that review must not run the implementer's model: on an
+      # account funding one model, review cannot run at all.
+      model-secrets:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   dispatch:
@@ -127,6 +146,34 @@ jobs:
       - name: Set up the target's toolchain
         if: inputs.setup != ''
         run: ${{ inputs.setup }}
+
+      - name: Export the named model secrets
+        if: inputs.model-secrets != ''
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+          WANTED: ${{ inputs.model-secrets }}
+        run: |
+          set -euo pipefail
+          for name in $WANTED; do
+            case "$name" in
+              [A-Za-z_][A-Za-z0-9_]*) ;;
+              *) echo "::error::not a usable variable name: $name"; exit 1 ;;
+            esac
+            v=$(printf '%s' "$ALL_SECRETS" | jq -r --arg n "$name" '.[$n] // empty')
+            if [ -z "$v" ]; then
+              echo "::warning::$name is named in model-secrets but not set on this repository"
+              continue
+            fi
+            # Already masked as a secret; masking again costs nothing and
+            # covers the case where it arrived some other way.
+            echo "::add-mask::$v"
+            {
+              echo "$name<<MESTHIRI_EOF"
+              echo "$v"
+              echo "MESTHIRI_EOF"
+            } >> "$GITHUB_ENV"
+            echo "exported $name"
+          done
 
       - name: Dispatch
         env:

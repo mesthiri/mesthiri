@@ -128,7 +128,9 @@ Add these to Settings → Secrets and variables → Actions:
 
   MESTHIRI_READER_KEY   contents of mesthiri-reader.private-key.pem
   MESTHIRI_WRITER_KEY   contents of mesthiri-writer.private-key.pem
-  MESTHIRI_MODEL_KEY    your model backend's API key
+  ANTHROPIC_API_KEY     your model backend's API key — name it whatever
+                        your config's `(secret …)` says, and list it in
+                        the shim's `model-secrets`
 
 Then delete the .pem files. They are not needed again, and GitHub will
 not show them to you a second time either.
@@ -253,7 +255,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
   ;; in step by hand. (Derived and reported — not enforced yet.)
   (providers
     (main (endpoint "https://api.anthropic.com")
-          (secret   MESTHIRI_MODEL_KEY)     ; the Actions secret
+          (secret   ANTHROPIC_API_KEY)      ; your repository secret
           (key-env  ANTHROPIC_API_KEY)))    ; what the agent reads it from
 
   ;; Your rubric, in your repository. mesthiri does not bring one.
@@ -357,6 +359,20 @@ spots, which is precisely what you were hoping review would catch.
 If you use a gateway or a self-hosted endpoint, point `endpoint` at it. The
 sandbox allowlist follows from that value, so there is no second place to
 update and no way for the two to disagree.
+
+**Several providers, several keys.** Each provider names its own repository
+secret, and the shim lists which to forward:
+
+```yaml
+  with:
+    model-secrets: "ANTHROPIC_API_KEY DEEPSEEK_API_KEY"
+  secrets: inherit
+```
+
+Only the names you list are exported. You need this as soon as two stages
+must differ — mesthiri refuses a config where review runs the implementer's
+provider and model, so review needs a model that code is not using, and on
+some accounts that means a second provider entirely.
 
 One thing not to assume from that: the allowlist is derived and reported,
 and **not yet enforced**. The agent shares the runner's network. Its

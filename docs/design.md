@@ -366,13 +366,19 @@ namespace entirely, and a separate unprivileged uid. Network egress is
 runner reaches, and the forge is off-limits to it because it holds no
 credential rather than because a packet filter says so.
 
-**Exactly one model key travels, and that is a limitation, not a design.**
-The shim has a single `model-key` input, so a repository can fund one
-provider. A config may declare several — they differ in `key-env` and `api`
-— but only the one whose key occupies that channel will answer. It bites
-where two stages must differ: review is refused if it runs the implementer's
-provider and model, so on an account funding a single model, review cannot
-run at all. `docs/plan.md` carries the open item.
+**A provider's key is named by the provider.** `(secret GLM_API_KEY)` names
+a repository secret, and the shim lists which secrets to forward in
+`model-secrets`; only those are exported. A reusable workflow cannot receive
+a secret whose name it does not declare, and mesthiri cannot declare names
+belonging to a target repository — so the names come from the maintainers'
+own shim, which is the same place `setup` and the trigger schedule live.
+
+This started as a single `model-key` input, which meant a repository could
+fund exactly one provider. That collided with the rule that review must not
+run the implementer's provider and model: on an account funding one model,
+review could not run at all. The collision is what made the case for
+per-provider secrets; the config had always looked as though it worked this
+way.
 
 **One credential does go in.** The agent needs its model backend's API key
 to work at all, so that key — and only that key — is passed into the

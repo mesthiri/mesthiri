@@ -58,12 +58,22 @@ jobs:
     # a repo running an older shim.
     if: ${{ !contains(github.event.comment.body, '<!-- mesthiri:') }}
     uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
-    # Whatever your own tests need in order to run. The code stage asks the
-    # agent to get them green, and it cannot do that with no toolchain.
     # with:
+    #   # Whatever your own tests need in order to run. The code stage asks
+    #   # the agent to get them green, and it cannot do that with no
+    #   # toolchain.
     #   setup: |
     #     curl -fsSL -o /usr/local/bin/yourtool https://…
     #     chmod +x /usr/local/bin/yourtool
+    #
+    #   # Repository secrets holding model API keys, by the names your
+    #   # .mesthiri/config.scm gives in each provider's `(secret …)`. Needs
+    #   # `secrets: inherit` below, because a reusable workflow cannot
+    #   # receive a secret whose name it does not declare, and mesthiri
+    #   # cannot declare names that belong to your repository. Only the
+    #   # names you list here are exported.
+    #   model-secrets: "ANTHROPIC_API_KEY DEEPSEEK_API_KEY"
+    # secrets: inherit
     secrets:
       reader-key: ${{ secrets.MESTHIRI_READER_KEY }}
       writer-key: ${{ secrets.MESTHIRI_WRITER_KEY }}
