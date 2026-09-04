@@ -16,23 +16,30 @@ review outcomes. The mascot is a Great Hornbill — Kerala's state bird, which
 grows its own hard hat and is here checking the wall against a plumb line rather
 than building it. See [assets/README.md](assets/README.md) for the marks.
 
-## Status: pre-alpha (M1 and M2 landed, no stages yet)
+## Status: pre-alpha (every milestone landed, no live agent run yet)
 
 The design is settled (see [docs/design.md](docs/design.md)) and
-[docs/plan.md](docs/plan.md) sequences the work. **M1 and M2 are in**: the
-modules underneath, and dispatch — the shim workflow, the reusable workflow,
-slash commands with permission checks, and `explain-event` — under 183
-tests. What is missing is the part that does anything: every stage, triage
-onward, is still ahead. Installing mesthiri today would give you a pipeline
-that authorizes events correctly and then has nothing to run. The project's subprocess needs
-drove
+[docs/plan.md](docs/plan.md) sequences the work; M0 through M9 are now
+ticked. That means the modules, dispatch, all six stages, the sandbox, the
+release workflow and `mesthiri install` exist, under 455 assertions across
+25 modules.
+
+It does **not** mean this works. One gap outweighs the rest: mesthiri has
+never actually spawned the coding agent. Every stage calls `run-agent`, and
+every test drives it through an injected runner — so the live path (pipes,
+the drive loop, the deadline kill) is unexercised, and that is the piece
+everything else exists to serve. Treat the milestones as scaffolding that
+compiles and is tested, not as a working orchestrator.
+
+The project's subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
 — native `(kaappi process)` support — which **shipped in Kaappi v0.26.0**
 (all four phases; the KEP is Final), so mesthiri requires **Kaappi ≥ 0.26**
 to build.
 
-You will not need Kaappi to *use* it. mesthiri compiles to a standalone
-binary that a workflow in your repository downloads and runs.
+You will not need Kaappi to *use* it. A release is three files — the binary
+plus the two C-FFI shared objects it links against — which the reusable
+workflow downloads and checksums for you.
 
 ### Inspired by fullsend
 
@@ -46,8 +53,11 @@ capability in production today, look at fullsend first.
 
 [docs/guide.md](docs/guide.md) shows the intended end-user experience —
 install, configure, first triage, what a mesthiri pull request looks like.
-It is written ahead of the code, so treat it as a design preview rather
-than instructions.
+It was written ahead of the code as a design tool, and the code has now
+caught up to most of it — but until an agent has actually run, treat it as
+a design preview rather than instructions. The tests check the guide's
+sample configuration against mesthiri's own reader, so at least the parts
+you would copy are real.
 
 ## The pipeline
 

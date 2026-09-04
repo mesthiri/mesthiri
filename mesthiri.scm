@@ -11,6 +11,7 @@
         (mesthiri command) (mesthiri dispatch) (mesthiri log) (mesthiri proc)
         (mesthiri version) (mesthiri agent) (mesthiri sandbox)
         (mesthiri harness) (mesthiri triage) (mesthiri labels)
+        (mesthiri install)
         (mesthiri sweep) (mesthiri prioritize) (mesthiri code)
         (mesthiri eligibility) (mesthiri git) (mesthiri review)
         (mesthiri fix) (mesthiri retro))
@@ -642,6 +643,243 @@
             (display "\nboundary holds.\n")))
         (display "\n(pass --prove-sandbox to assert the boundary)\n"))))
 
+;; --- install / uninstall --------------------------------------------------
+;;
+;; Installing runs on a person's machine with a personal token, not on a
+;; runner with an App token: the App is not installed on the repository yet,
+;; so there is no App credential to use. That is the honest shape anyway —
+;; enrolling a repository is a decision someone makes, and it should carry
+;; their name.
+;;
+;; Every file change arrives as a pull request. mesthiri does not push to a
+;; default branch to install itself; maintainers read the shim before it can
+;; run, which is the only reason it is worth keeping the shim small.
+
+(define (install-token)
+  (or (env "GITHUB_TOKEN") (env "GH_TOKEN")
+      (die "set GITHUB_TOKEN: install uses your own token, not an App —\n"
+           "       the App is not installed on that repository yet.")))
+
+(define (api-get f path)      (forge-get f path))
+(define (api-post f path obj) (forge-post f path (json-write-string obj)))
+(define (jref o k)            (let ((e (assoc k o))) (and e (cdr e))))
+
+(define (default-branch f repo)
+  (or (jref (api-get f (string-append "/repos/" repo)) "default_branch")
+      (die "cannot read " repo " — check the name and your token's access")))
+
+(define (branch-head f repo branch)
+  (jref (jref (api-get f (string-append "/repos/" repo "/git/ref/heads/" branch))
+              "object")
+        "sha"))
+
+(define (commit-tree f repo sha)
+  (jref (jref (api-get f (string-append "/repos/" repo "/git/commits/" sha)) "tree") "sha"))
+
+(define (make-blob f repo text)
+  (jref (api-post f (string-append "/repos/" repo "/git/blobs")
+                  (list (cons "content" text) (cons "encoding" "utf-8")))
+        "sha"))
+
+;; entries: ((path . blob-sha-or-#f) ...). #f deletes the path, which is how
+;; uninstall is the same code path as install run backwards.
+(define (make-tree f repo base entries)
+  (jref (api-post
+         f (string-append "/repos/" repo "/git/trees")
+         (list (cons "base_tree" base)
+               (cons "tree"
+                     (list->vector
+                      (map (lambda (e)
+                             (list (cons "path" (car e))
+                                   (cons "mode" "100644")
+                                   (cons "type" "blob")
+                                   (cons "sha" (or (cdr e) json-null))))
+                           entries)))))
+        "sha"))
+
+(define (make-commit f repo message tree parent)
+  (jref (api-post f (string-append "/repos/" repo "/git/commits")
+                  (list (cons "message" message)
+                        (cons "tree" tree)
+                        (cons "parents" (vector parent))))
+        "sha"))
+
+(define (make-branch! f repo name sha)
+  ;; Idempotent by deletion: a leftover branch from an abandoned attempt would
+  ;; otherwise make the second install fail with "reference already exists",
+  ;; which reads as a permissions problem and is not one.
+  (guard (e ((forge-error? e) #t))
+    (forge-request f 'DELETE (string-append "/repos/" repo "/git/refs/heads/" name)))
+  (api-post f (string-append "/repos/" repo "/git/refs")
+            (list (cons "ref" (string-append "refs/heads/" name)) (cons "sha" sha))))
+
+(define (open-pr! f repo head base title body)
+  (jref (api-post f (string-append "/repos/" repo "/pulls")
+                  (list (cons "title" title) (cons "head" head)
+                        (cons "base" base) (cons "body" body)))
+        "html_url"))
+
+;; A commit made through the API gets no trailers of its own, so the sign-off
+;; is written here. It names the operator because that is what a sign-off is:
+;; a person asserting where a contribution came from.
+(define (signed message operator-name operator-email)
+  (string-append message "\n\nSigned-off-by: " operator-name
+                 " <" operator-email ">\n"))
+
+(define (path-present? f repo path)
+  (guard (e ((forge-error? e) #f))
+    (api-get f (string-append "/repos/" repo "/contents/" path)) #t))
+
+(define (repo-tree-paths f repo sha)
+  (let ((t (api-get f (string-append "/repos/" repo "/git/trees/" sha "?recursive=1"))))
+    (map (lambda (e) (jref e "path"))
+         (vector->list (or (jref t "tree") #())))))
+
+
+(define (cmd-install args)
+  (let* ((repo (if (and (pair? args) (not (char=? (string-ref (car args) 0) #\-)))
+                   (car args)
+                   (die "usage: mesthiri install <owner/repo> [--operator \"Name <email>\"]")))
+         (preset (and (arg-after args "--preset") kaappi-preset))
+         (op (or (arg-after args "--operator")
+                 (and preset (string-append (cdr (assoc "operator-name" preset))
+                                            " <" (cdr (assoc "operator-email" preset)) ">"))
+                 (die "pass --operator \"Your Name <you@example.org>\" — the\n"
+                      "       scaffolded config signs mesthiri's commits with it.")))
+         (reader (string->number (or (arg-after args "--reader") "0")))
+         (writer (string->number (or (arg-after args "--writer") "0")))
+         (f (make-forge http-transport)))
+    ;; mesthiri is never installed on the repository that decides what
+    ;; mesthiri may do. A fork is somebody else's copy and is unaffected.
+    (if (refuses-self? repo)
+        (die "refusing to install on " repo ": an orchestrator that can edit\n"
+             "       the code deciding its own limits has no limits."))
+    (forge-auth! f (bearer (install-token)))
+    (if (member "--status" args)
+        (install-status f repo)
+        (do-install f repo op reader writer))))
+
+
+(define (install-status f repo)
+  (display "mesthiri install status — ") (display repo) (newline)
+  (for-each
+   (lambda (l)
+     (let* ((name (layer-name l))
+            (present
+             (if (eq? name 'labels)
+                 (let ((have (map (lambda (x) (jref x "name"))
+                                  (forge-get-all f (string-append "/repos/" repo "/labels")))))
+                   (let loop ((w workflow-labels))
+                     (cond ((null? w) #t)
+                           ((member (car w) have) (loop (cdr w)))
+                           (else #f))))
+                 (path-present?
+                  f repo (case name
+                           ((config)    ".mesthiri/config.scm")
+                           ((rubric)    ".mesthiri/rubric.md")
+                           ((harnesses) ".mesthiri/harness/triage.scm")
+                           (else        ".github/workflows/mesthiri.yml"))))))
+       (display (if present "  installed  " "  missing    "))
+       (display name) (newline)))
+   install-layers))
+
+(define (do-install f repo op reader writer)
+  (let*-values (((oname omail) (split-operator op)))
+    (let* ((base   (default-branch f repo))
+           (head   (branch-head f repo base))
+           (btree  (commit-tree f repo head))
+           (files  (scaffold-files oname omail reader writer)))
+      (display "installing mesthiri on ") (display repo)
+      (display " (base ") (display base) (display ")\n")
+      ;; The labels layer is applied directly, not through the pull request:
+      ;; labels are not files, and creating one that already exists is a
+      ;; no-op, so this stays idempotent.
+      (ensure-labels! f repo)
+      (display "  labels      created\n")
+      (let* ((entries (map (lambda (p) (cons (car p) (make-blob f repo (cdr p)))) files))
+             (tree    (make-tree f repo btree entries))
+             (commit  (make-commit f repo
+                                   (signed "Install mesthiri\n\nEvery stage off except triage in dry-run."
+                                           oname omail)
+                                   tree head)))
+        (make-branch! f repo "mesthiri/install" commit)
+        (for-each (lambda (p) (display "  added       ") (display (car p)) (newline)) files)
+        (let ((url (open-pr! f repo "mesthiri/install" base
+                             "Install mesthiri" (install-pr-body install-layers))))
+          (display "\n") (display url) (newline)
+          (display "Merging it starts nothing: triage is in dry-run and every\n")
+          (display "other stage is off. Add the App keys as repository secrets\n")
+          (display "before turning anything on.\n"))))))
+
+(define (cmd-uninstall args)
+  (let* ((repo (if (pair? args) (car args)
+                   (die "usage: mesthiri uninstall <owner/repo>")))
+         (op (or (arg-after args "--operator")
+                 (die "pass --operator \"Your Name <you@example.org>\"")))
+         (f (make-forge http-transport)))
+    (forge-auth! f (bearer (install-token)))
+    (let*-values (((oname omail) (split-operator op)))
+      (let* ((base  (default-branch f repo))
+             (head  (branch-head f repo base))
+             (btree (commit-tree f repo head))
+             (gone  (let loop ((p (repo-tree-paths f repo head)) (acc '()))
+                      (cond ((null? p) (reverse acc))
+                            ((under-mesthiri? (car p)) (loop (cdr p) (cons (car p) acc)))
+                            (else (loop (cdr p) acc))))))
+        (if (null? gone)
+            (begin (display "nothing to remove: ") (display repo)
+                   (display " has no mesthiri files\n") (exit 0)))
+        ;; Reverse order, so the shim stops running before its config
+        ;; disappears — irrelevant in one commit, but the layer model is only
+        ;; worth having if it is actually followed.
+        (let* ((entries (map (lambda (p) (cons p #f)) (reverse gone)))
+               (tree    (make-tree f repo btree entries))
+               (commit  (make-commit f repo
+                                     (signed "Remove mesthiri" oname omail)
+                                     tree head)))
+          (make-branch! f repo "mesthiri/uninstall" commit)
+          (for-each (lambda (p) (display "  removed     ") (display p) (newline)) gone)
+          (let ((url (open-pr! f repo "mesthiri/uninstall" base
+                               "Remove mesthiri" (uninstall-pr-body))))
+            (display "\n") (display url) (newline)
+            (display "The labels are left: they are your issues' state, not\n")
+            (display "mesthiri's. Delete them yourself if you want them gone.\n")))))))
+
+;; --- apps create ----------------------------------------------------------
+;;
+;; This prints URLs rather than creating anything. GitHub's App-manifest flow
+;; ends by handing the private key to whoever completes it in the browser, and
+;; that has to be the person who will hold it — not a process that could log
+;; it. So the command does the tedious half (getting the permissions and event
+;; subscriptions right) and stops at the point where a human must be present.
+
+(define (cmd-apps args)
+  (if (or (null? args) (not (string=? (car args) "create")))
+      (die "usage: mesthiri apps create [--org <name>]"))
+  (let* ((org  (arg-after args "--org"))
+         (base (if org (string-append "https://github.com/organizations/" org
+                                      "/settings/apps/new")
+                   "https://github.com/settings/apps/new")))
+    (display "Two Apps, because the split is the guardrail: the reader can\n")
+    (display "never write, so an event that only needs to read cannot alter\n")
+    (display "anything even if the code is wrong.\n\n")
+    (display "1. reader — open:\n     ") (display base) (newline)
+    (display "   name:         mesthiri-reader\n")
+    (display "   permissions:  Contents: Read, Issues: Read, Pull requests: Read,\n")
+    (display "                 Metadata: Read\n")
+    (display "   webhooks:     off — mesthiri has no receiver to send them to\n\n")
+    (display "2. writer — open the same page again:\n")
+    (display "   name:         mesthiri-writer\n")
+    (display "   permissions:  Contents: Write, Issues: Write, Pull requests: Write,\n")
+    (display "                 Metadata: Read\n")
+    (display "   webhooks:     off\n\n")
+    (display "Then, for each: generate a private key, install it on the repos\n")
+    (display "you want, and add the .pem as a repository secret —\n")
+    (display "MESTHIRI_READER_KEY and MESTHIRI_WRITER_KEY.\n\n")
+    (display "Check the pairing before anything else; a swapped id and key is\n")
+    (display "the likeliest setup mistake and it fails obscurely:\n")
+    (display "     mesthiri whoami --app reader --key reader.pem\n")))
+
 (define (usage)
   (display "mesthiri ") (display mesthiri-version)
   (display " — CI-native ADLC orchestrator\n\n")
@@ -658,6 +896,15 @@
   (display "  agent-smoke [--prove-sandbox]\n")
   (display "      Report the sandbox and the derived egress allowlist.\n")
   (display "      --prove-sandbox asserts the boundary instead of describing it.\n\n")
+  (display "  install <owner/repo> --operator \"Name <email>\" [--status]\n")
+  (display "      Scaffold .mesthiri/, create the labels, and open the shim\n")
+      (display "      workflow as a pull request. Merging it starts nothing.\n\n")
+  (display "  uninstall <owner/repo> --operator \"Name <email>\"\n")
+  (display "      Open the reversing pull request. The labels are left alone.\n\n")
+  (display "  apps create [--org <name>]\n")
+  (display "      Print what the two GitHub Apps need. It creates nothing:\n")
+  (display "      the manifest flow hands the private key to whoever\n")
+  (display "      finishes it, and that must be you.\n\n")
   (display "  whoami [--app reader|writer] [--key <pem>] [--config <path>]\n")
   (display "      Mint an installation token and report the installation,\n")
   (display "      its permissions and the remaining rate limit.\n")
@@ -688,4 +935,7 @@
         ((string=? (car args) "explain-event") (cmd-explain (cdr args)))
         ((string=? (car args) "agent-smoke") (cmd-agent-smoke (cdr args)))
         ((string=? (car args) "try") (cmd-try (cdr args)))
+        ((string=? (car args) "install") (cmd-install (cdr args)))
+        ((string=? (car args) "uninstall") (cmd-uninstall (cdr args)))
+        ((string=? (car args) "apps") (cmd-apps (cdr args)))
         (else (usage))))

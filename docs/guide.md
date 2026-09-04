@@ -100,17 +100,21 @@ because your branch protection stops it. Keep branch protection on; it is the
 control that actually enforces this, rather than a permission you withheld.
 
 ```bash
-mesthiri apps create --repo owner/repo
+mesthiri apps create
 ```
 
-This prints two URLs. Opening each one takes you to GitHub's App creation
-page with the name and permissions already filled in; you confirm, and
-GitHub hands you a private key.
+This prints the App creation page's URL and exactly what to put on it: the
+name, the four permissions, and webhooks off. It does not pre-fill the form
+and it does not create anything, which is deliberate rather than unfinished.
+GitHub's App-manifest flow — the mechanism that *would* pre-fill it — ends by
+handing the private key to whatever completed the flow. That has to be you,
+at a browser, not a command that could log it. So the command does the part
+that is easy to get wrong and stops where a person must be present.
 
-One pair per repository is the default because an App's installation set is
-its blast radius — see the note below. `--org your-org` registers one pair
-for several repositories instead, which is right when those repositories
-have the same maintainers and wrong when they do not.
+`--org your-org` prints the organization's App page instead of your personal
+one. One pair per repository is the default because an App's installation set
+is its blast radius — see the note below. Sharing a pair across repositories
+is right when they have the same maintainers and wrong when they do not.
 
 ### Store the keys
 
@@ -154,13 +158,22 @@ not be one that unlocks anything else you own.
 
 ### Install
 
+`install` runs on your machine with your own `GITHUB_TOKEN`, not with an App
+token — the Apps are not installed on the repository yet, so there is no App
+credential to use. Enrolling a repository is a decision a person makes, and
+it carries their name.
+
 ```bash
-mesthiri install owner/repo
+mesthiri install owner/repo --operator "Your Name <you@example.org>"
 ```
 
-This opens a pull request against your repository adding three files: a shim
-workflow under `.github/workflows/`, a starter `.mesthiri/config.scm`, and a
-starter rubric. Read it like any other pull request. The 8 workflow labels
+The operator is required because the scaffolded config signs mesthiri's
+commits with it, and a sign-off names a person.
+
+This opens a pull request against your repository adding five files: a shim
+workflow under `.github/workflows/`, a starter `.mesthiri/config.scm`, a
+starter rubric, and a harness file per role saying which model that role
+uses. Read it like any other pull request. The 8 workflow labels
 dispatch and the sweeps coordinate through are created through the API when
 the pull request is opened — they are inert until the workflow exists, and
 dispatch re-creates any you delete rather than failing a run. Merging the
@@ -170,11 +183,14 @@ pull request is what turns mesthiri on. (`install` refuses
 ```
 mesthiri install — opening a pull request, changing nothing directly
 
-  .github/workflows/mesthiri.yml   new    38 lines
-  .mesthiri/config.scm             new    34 lines
-  .mesthiri/rubric.md              new    52 lines
+  labels      created
+  added       .mesthiri/config.scm
+  added       .mesthiri/rubric.md
+  added       .mesthiri/harness/triage.scm
+  added       .mesthiri/harness/review.scm
+  added       .github/workflows/mesthiri.yml
 
-Opened owner/repo#1204.
+https://github.com/owner/repo/pull/1204
 
 Everything starts in dry-run: triage will comment its reasoning and apply
 no labels until you change one line. Nothing else runs at all until you
@@ -263,7 +279,8 @@ code and a fork carries a copy. It is s-expressions, read as data.
   ;; `mode` is off | dry-run | live, and defaults to off. This is what
   ;; install scaffolds: triage thinking out loud, nothing else running.
   (stages
-    (triage     (on (or (issue-opened) (issue-reopened) (schedule "07:00")))
+    (triage     (on (or (issue-opened) (issue-reopened)
+                        (command "/triage")))
                 (mode dry-run))                    ; ← the line to change
     (prioritize (on (schedule "08:00"))            (mode off))
     (code       (on (or (label "ready-to-implement")
@@ -271,7 +288,7 @@ code and a fork carries a copy. It is s-expressions, read as data.
                 (max-tier 0))                      ; raise to 1 when ready
     (review     (on (pull-request-updated))        (mode off))
                 ;; only PRs mesthiri opened — built into dispatch, not a predicate
-    (fix        (on (findings-posted))             (mode off))
+    (fix        (on (command "/fix"))              (mode off))
     (retro      (on (schedule "sunday 06:00"))     (mode off))))
 ```
 
@@ -513,7 +530,7 @@ mesthiri cannot make it.
 ## Turning it off
 
 ```bash
-mesthiri uninstall owner/repo
+mesthiri uninstall owner/repo --operator "Your Name <you@example.org>"
 ```
 
 Opens a pull request removing the shim workflow and `.mesthiri/`. Merging

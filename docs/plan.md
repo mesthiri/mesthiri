@@ -384,7 +384,7 @@ stage that spent its budget without reaching green.
 
 ## M9 — Installation and distribution
 
-- [ ] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
+- [x] `mesthiri install <owner/repo>` — scaffold `.mesthiri/` (config plus
       a **starter rubric**, since most repos have none and "first write a
       policy document" is a poor first five minutes), create the workflow
       labels through the API, and open the shim workflow as a pull request,
@@ -394,6 +394,22 @@ stage that spent its budget without reaching green.
       scaffolded config matches the guide's sample (App IDs, deny-paths,
       `max-tier 0`, budgets, pinned versions). The layering idea is
       fullsend's ADR 0006.
+
+      Two things the implementation settled. `install` runs with the
+      operator's own token, not an App token — the Apps are not installed on
+      the repository yet, so no App credential exists to use; enrolling is a
+      person's decision and now carries their name via a required
+      `--operator`. And the scaffold writes **five** files, not three: a
+      harness per role joined the config, rubric and shim once models became
+      per-role. The guide said three and said `apps create` pre-fills a form;
+      both are corrected.
+
+      The scaffold is checked by the tests rather than by eye: it is parsed
+      with mesthiri's own reader, its triggers are validated against the
+      trigger vocabulary, and its harnesses are read back. That last one
+      caught a real bug — the scaffold wrote `(budget ...)` where the reader
+      wants `(budgets ...)`, which parses fine, returns `#f`, and silently
+      disables the budget.
 - [x] Release automation: `.github/workflows/release.yml` builds Linux
       x86_64 and arm64 plus macOS arm64, smoke-tests each, and publishes with
       SHA256SUMS on a tag push.
@@ -415,15 +431,23 @@ stage that spent its budget without reaching green.
       distribution means a fix here reaches installed repos without
       a pull request to each — and means every run depends on this
       repository, which the checksum check is there to bound.
-- [ ] `mesthiri apps create` — print pre-filled GitHub App manifest URLs
-      for the reader and writer Apps so registration is a confirm rather
-      than a form. Secrets are still pasted by hand: GitHub's secrets API
-      needs NaCl sealed-box encryption, and a crypto dependency is too much
-      to carry for a once-per-repo step (design.md records this).
-- [ ] A preset for the kaappi org so its repos install with one command.
+- [x] `mesthiri apps create` — print what the reader and writer Apps need:
+      the creation page's URL, the four permissions, webhooks off, and the
+      `whoami` check to run afterwards.
+
+      **Not** pre-filled manifest URLs, which is what this bullet asked for
+      and what turned out to be the wrong shape. GitHub's App-manifest flow
+      is a form POST that ends by handing the private key to whatever
+      completed the flow — so pre-filling it means either a local redirect
+      handler or a process that briefly holds the key. Neither is worth it
+      for a once-per-repo step whose hard part is getting the permissions
+      right, which the command does do. Secrets are still pasted by hand:
+      GitHub's secrets API needs NaCl sealed-box encryption, and a crypto
+      dependency is too much to carry (design.md records this).
+- [x] A preset for the kaappi org so its repos install with one command.
       It ships a placeholder operator the org fills in; rotation afterwards
       is a config edit.
-- [ ] `mesthiri install` refuses `mesthiri/mesthiri` by string match; forks
+- [x] `mesthiri install` refuses `mesthiri/mesthiri` by string match; forks
       are unaffected.
 
 **Demo:** `mesthiri install` opens a pull request against a repo that has
