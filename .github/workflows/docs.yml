@@ -20,9 +20,13 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on a pull request — a force-push should not leave the
+# old run burning minutes. Never cancel on main: consecutive pushes share a
+# ref, so cancel-in-progress there means a commit can land with no completed
+# check, which is exactly what a required check is supposed to prevent.
 concurrency:
   group: docs-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   diagrams:
