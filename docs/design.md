@@ -156,6 +156,17 @@ maintainer who expected YAML.
   A role is configured in one reviewable file rather than scattered across
   workflow YAML, which is fullsend's harness idea (their ADR 0024).
 
+**Harnesses have defaults.** mesthiri ships a harness for every role, so a
+repository works with a `config.scm` and nothing else; nobody should have to
+write a system prompt to see a first verdict. A `.mesthiri/harness/<role>.scm`
+overrides any subset of the shipped one and inherits the rest. Two
+resolution rules keep that from becoming guesswork: a harness that names no
+provider gets the sole declared provider, and must name one if several are
+declared; and **budgets only tighten** — a harness may lower the per-run
+caps in `config.scm` but never raise them, so the repository-level number is
+a ceiling rather than a suggestion. Upgrading mesthiri can change a shipped
+default, including its model, which is a release-note matter.
+
 ### Providers, models and the endpoint
 
 `(agent (backend pi) …)` names the *harness program* mesthiri drives, not
@@ -301,8 +312,13 @@ one. `mesthiri try` reads a repository and writes nothing. Triage in
 applies them. The code stage opens pull requests for tier 0 work, then
 tier 1. Review and fix follow.
 
-Stages therefore carry a `mode` — `dry-run` or `live` — rather than triage
-alone, and the tier ceiling is configuration. There is no rung on which
+Stages therefore carry a `mode`, and it has three values rather than two:
+`off`, `dry-run`, `live`. **`off` is the default**, and a freshly installed
+repository has every stage off except triage in `dry-run` — otherwise
+merging the install pull request would start opening real ones, which is not
+what "install" should mean. The code stage additionally carries `max-tier`,
+defaulting to 0, which is what rungs four and five of the ladder actually
+move. There is no rung on which
 mesthiri merges, and tier 2 waits for a human at every rung.
 
 ## Eligibility: what mesthiri may attempt

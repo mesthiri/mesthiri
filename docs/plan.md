@@ -132,6 +132,11 @@ with no server.
       pinned model, effort, budgets and sandbox policy as one reviewable
       file per role. A floating model alias is rejected at load, not
       resolved.
+- [ ] Shipped default harnesses, one per role, so a repo runs on
+      `config.scm` alone; a repo file overrides any subset and inherits the
+      rest. A harness with no provider gets the sole declared one and must
+      name one if several exist, and its budgets may only lower the
+      per-run ceiling from `config.scm`, never raise it.
 - [ ] The sandbox egress allowlist is **derived** from the configured
       provider endpoint, never hand-written alongside it — a mismatch
       between the two surfaces as a connection failure inside an agent run,
@@ -156,9 +161,10 @@ cannot reach a host off the allowlist.
       target repo at its configured path, propose exactly one `priority:`
       label and an intent tier, comment the rationale, record the rubric's
       commit SHA in the verdict.
-- [ ] `(mode dry-run)` on a stage prints what it would do and writes
-      nothing. A per-stage setting rather than a triage flag, because the
-      adoption ladder in design.md needs it on the code stage later too.
+- [ ] Stage `mode` — `off` | `dry-run` | `live`, defaulting to **off**.
+      A freshly installed repo has triage in dry-run and everything else
+      off; merging an install pull request must not start opening real
+      ones. The code stage also carries `max-tier`, default 0.
 - [ ] Red-team fixture from day one: an issue whose body tries to instruct
       the agent, asserted to change no verdict.
 - [ ] The scheduled sweep, finding its work by **querying the forge for

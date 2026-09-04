@@ -78,12 +78,17 @@ Neither gets merge permission. That is not a setting you can turn on later
 by accident — mesthiri has no code path that merges anything.
 
 ```bash
-mesthiri apps create --org your-org
+mesthiri apps create --repo owner/repo
 ```
 
 This prints two URLs. Opening each one takes you to GitHub's App creation
 page with the name and permissions already filled in; you confirm, and
 GitHub hands you a private key.
+
+One pair per repository is the default because an App's installation set is
+its blast radius — see the note below. `--org your-org` registers one pair
+for several repositories instead, which is right when those repositories
+have the same maintainers and wrong when they do not.
 
 ### Store the keys
 
@@ -213,14 +218,17 @@ code and a fork carries a copy. It is s-expressions, read as data.
             (fix       (min-permission write))
             (retro     (min-permission triage)))
 
+  ;; `mode` is off | dry-run | live, and defaults to off. This is what
+  ;; install scaffolds: triage thinking out loud, nothing else running.
   (stages
     (triage     (on (or (issue-opened) (issue-reopened) (schedule "07:00")))
                 (mode dry-run))                    ; ← the line to change
-    (prioritize (on (schedule "07:30")))
-    (code       (on (label "ready-to-implement")))
-    (review     (on (pull-request-updated)))
-    (fix        (on (findings-posted)))
-    (retro      (on (schedule "sunday 06:00")))))
+    (prioritize (on (schedule "07:30"))            (mode off))
+    (code       (on (label "ready-to-implement"))  (mode off)
+                (max-tier 0))                      ; raise to 1 when ready
+    (review     (on (pull-request-updated))        (mode off))
+    (fix        (on (findings-posted))             (mode off))
+    (retro      (on (schedule "sunday 06:00"))     (mode off))))
 ```
 
 The expressions after `on` are predicates over the event, drawn from a
@@ -234,6 +242,12 @@ so it lives in that role's harness file. Triage reads issues and applies a
 rubric; review argues with a diff. They do not need the same model, and
 paying for the stronger one everywhere is the most common way to make this
 expensive for no benefit.
+
+You do not have to write these. mesthiri ships a harness for every role, and
+a file under `.mesthiri/harness/` overrides whichever parts of it you name
+and inherits the rest — so this is tuning, not setup. Budgets there may only
+*lower* the per-run caps from `config.scm`; the repository-level number is a
+ceiling, not a default to argue with.
 
 ```scheme
 ;; .mesthiri/harness/triage.scm
@@ -362,12 +376,13 @@ Move one step at a time, and only after the previous step has been boring
 for a while:
 
 1. `mesthiri try` — nothing installed, nothing written.
-2. Triage in `dry-run` — reasoning in comments, no labels.
-3. Triage `live` — labels applied.
-4. Code stage on tier 0 only — typo and docs fixes open real pull
-   requests.
-5. Code stage on tier 1 — ordinary bug fixes.
-6. Review and fix.
+2. Triage `(mode dry-run)` — reasoning in comments, no labels. What install
+   gives you.
+3. Triage `(mode live)` — labels applied.
+4. Code `(mode live)` with `(max-tier 0)` — typo and docs fixes open real
+   pull requests.
+5. Code `(max-tier 1)` — ordinary bug fixes.
+6. Review and fix `(mode live)`.
 
 Tier 2 work — features, migrations, anything cross-cutting — always waits
 for a human to authorize it, at every step. There is no configuration that
