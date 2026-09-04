@@ -48,7 +48,9 @@ is that run's scratch clone; pipeline state lives in SQLite, while workflow
 state lives in labels a human can read and change. The forge is reached
 through its REST API, authenticated as a GitHub App you register and install
 on your own repos; stages are woken by cron, by the queue, or by a slash
-command from someone with the repo permission to issue it. Guardrails are
+command from someone with the repo permission to issue it. Every event is
+found by polling — mesthiri makes outbound requests and nothing listens, so
+the server it runs on needs no hostname, no TLS, and no open inbound port. Guardrails are
 structural: the App has no merge permission, the agent cannot reach the
 credentials that drive it, its output is schema-checked outside itself, a
 path denylist and intent tier decide what it may attempt at all, commits are
@@ -71,6 +73,8 @@ timeout.
 7. **Contain the agent.** Prompt wording is not a security boundary. The
    sandbox decides what a subverted run can reach; everything else is
    defence in depth.
+8. **Nothing listens.** Outbound HTTPS only. The cheapest attack surface to
+   secure is the one that does not exist.
 
 ## License
 

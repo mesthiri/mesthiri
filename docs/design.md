@@ -15,10 +15,11 @@ intent, define guardrails, and review outcomes. The model follows the
 published ADLC literature (agents execute; humans direct) and the working
 precedent of fullsend.sh's six-stage pipeline, but is:
 
-- **self-hosted**: you run the service, its database, and its webhook
-  receiver on your own server. Identity is a GitHub App *you* register and
-  install on *your* repos — there is no hosted multi-tenant service, no
-  cloud sandbox provider, and no vendor to enroll with;
+- **self-hosted**: you run the service and its database on your own
+  server, and it talks to the world over outbound HTTPS only — nothing
+  listens. Identity is a GitHub App *you* register and install on *your*
+  repos; there is no hosted multi-tenant service, no cloud sandbox
+  provider, and no vendor to enroll with;
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
   libraries (`kaappi-http`, `kaappi-json`, `kaappi-sqlite`, `kaappi-crypto`,
   `kaappi-log`, `kaappi-cli`, fibers);
@@ -46,7 +47,7 @@ change, justified by real timings from the retro stage.
 3. **Code** (queue-driven): claim a ready issue; clone into a scratch
    worktree; drive the agent to a tested implementation; run the *project's
    own* test command; open a PR with sign-off. One issue, one PR.
-4. **Review** (PR events, delivered by webhook): dimensions — correctness,
+4. **Review** (PR events, discovered by polling): dimensions — correctness,
    security, performance, intent alignment — each an independent agent pass;
    findings verified adversarially before posting (a finding that cannot
    survive a refutation attempt is not posted).
@@ -76,11 +77,12 @@ silence. Commands are further restricted to the entity where their inputs
 exist — `/implement` on an issue, `/fix` on a PR — and de-duplicated by
 comment id so a re-delivered event cannot run a stage twice.
 
-Event delivery is a **driver** behind the normalized-event interface.
-Polling the forge on a cursor is the first driver, and the webhook receiver
-described below is the second; the stages never learn which one woke them.
+Events are discovered by **polling** the forge on a cursor. mesthiri makes
+outbound requests and accepts no inbound ones; there is no webhook receiver
+and no listening socket (see below). Stages consume the normalized event
+and never see how it was found.
 
-## Forge identity and events
+## Forge identity and event discovery
 
 mesthiri authenticates as a **GitHub App** that the operator registers and
 installs on the repos it should work on. The App is the primary and default
@@ -98,13 +100,40 @@ installation is scoped to selected repositories.
   ecosystem yet — `kaappi-crypto` currently exports digests and HMACs only.
   It gains RSA signing upstream (OpenSSL is already linked there), and
   mesthiri's App auth depends on that landing.
-- **Events**: the App delivers webhooks to a receiver built on
-  `kaappi-http`'s server side. Deliveries are authenticated with
-  HMAC-SHA256 over the raw body (`kaappi-crypto`'s `hmac-sha256`, which
-  exists today), de-duplicated by delivery id in the store, and then treated
-  as ordinary untrusted data — a verified signature proves the sender, never
-  the contents. The endpoint is public inbound surface and is hardened as
-  such.
+- **Events**: found by polling, not delivered. A cursor per target and per
+  event class (issues, issue comments, pulls, reviews) advances on a
+  watermark; conditional requests carry the previous `ETag`, so an
+  unchanged poll returns `304` and costs nothing against the rate limit.
+  Work already handled is de-duplicated by issue, comment and commit id in
+  the store, so a re-read is idempotent. The App is registered **without a
+  webhook URL**, which means there is no webhook secret to hold and one
+  fewer credential on disk.
+
+### Why no webhook receiver
+
+A receiver was considered and rejected. Webhooks buy low latency, and
+mesthiri has little use for it: three of its six stages run on cron, two
+more are driven by its own queue rather than by anything arriving from
+outside, and only review waits on an external event. That plus commands is
+the whole latency-sensitive surface, and both are answered well enough on a
+poll interval measured in a few minutes. Against that, a receiver costs a
+public inbound endpoint on the operator's server, a hostname and TLS
+termination in front of it, signature verification, replay and body-size
+handling, and a second credential to store — all of it exposed to the
+internet, on a service whose entire threat model is about not trusting what
+arrives from outside. Polling also fails better: a webhook missed while the
+droplet reboots is gone (and GitHub disables an endpoint that keeps
+failing), whereas a poll re-reads the source of truth and catches up on its
+own. The trade-off accepted is latency and a steady trickle of API reads;
+the trade-off refused is being reachable from the internet at all.
+
+This is the same conclusion other ADLC orchestrators reach, though by a
+different route: a project built on hosted CI can make the CI system itself
+the receiver, with a thin workflow in each target repo forwarding native
+events inward. That option is not open to a long-lived service on a
+droplet — a shim would have nowhere to forward *to* except an inbound
+endpoint, which is the thing being avoided — so mesthiri polls for
+everything rather than for some things.
 
 ## Rubrics
 
@@ -189,9 +218,8 @@ cannot spawn an unsandboxed agent even by mistake:
 - read-only root filesystem;
 - the run's scratch clone as the only writable mount, and the *only* part of
   the host filesystem the agent can see at all;
-- the secrets directory (App private key, webhook secret, tokens) outside
-  the mount namespace entirely — unreachable rather than merely
-  unreadable;
+- the secrets directory (App private key, cached tokens) outside the mount
+  namespace entirely — unreachable rather than merely unreadable;
 - network egress restricted to what the run needs (the forge API, the
   target's package registries, the model endpoint), denied by default;
 - a separate unprivileged uid, so a namespace escape still lands somewhere
@@ -216,8 +244,8 @@ shape to consider.
 ## State
 
 SQLite (`kaappi-sqlite`): issues seen, triage verdicts, queue claims,
-pipeline runs (per-stage timings, agent spend, outcomes), delivery and
-comment ids already handled, retro facts. The database is mesthiri's own
+pipeline runs (per-stage timings, agent spend, outcomes), poll cursors and
+`ETag`s, ids already handled, retro facts. The database is mesthiri's own
 state, and the service is restartable at any point.
 
 Workflow state, though, lives where humans can see it: **in labels on the
@@ -243,7 +271,7 @@ label.
 | Command authorization | commands parsed deterministically and authorized against the *commenter's* repo permission |
 | Eligibility | path denylist and intent tier checked before an agent is spawned, not at merge time |
 | Stale approval | any new commit clears downstream workflow labels |
-| Authenticated events | webhook deliveries HMAC-verified and de-duplicated; contents still untrusted |
+| No inbound surface | outbound HTTPS only; nothing listens, so nothing can be reached |
 | Least privilege | GitHub App installed on selected repos only, minimal declared permissions, short-lived installation tokens |
 | Spend | per-run and per-night budgets enforced by the orchestrator, not the agent |
 | Serial execution | one agent run in flight process-wide; budgets and scratch dirs cannot race |

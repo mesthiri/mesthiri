@@ -23,10 +23,10 @@ because M1 and M2 each block on one.
 - [ ] **GitHub App registration** (human-only): register the `mesthiri` App
       under the `mesthiri` org; permissions Contents / Pull requests /
       Issues: write, Metadata: read, and **no** merge-granting permission;
-      subscribe to `issues`, `issue_comment`, `pull_request`,
-      `pull_request_review`; generate and store the private key and webhook
-      secret. No machine account, ToS acceptance, or 2FA enrolment is
-      needed — the App acts as `mesthiri[bot]`.
+      register it with **no webhook URL** (mesthiri polls; nothing
+      listens), so there is no webhook secret to generate or hold; generate
+      and store the private key. No machine account, ToS acceptance, or 2FA
+      enrolment is needed — the App acts as `mesthiri[bot]`.
 - [ ] **RS256 in `kaappi-crypto`** (other repo, blocks M1): the ecosystem
       has digests and HMACs only, and App auth needs an RS256-signed JWT.
       Add RSA sign/verify over OpenSSL's `EVP_DigestSign` (OpenSSL is
@@ -66,13 +66,13 @@ the PAT provider is written first so the rest of M1 can proceed meanwhile.
       else.
 - [ ] `lib/mesthiri/store.sld` — `kaappi-sqlite` schema: issues seen +
       cursor, triage verdicts (with intent tier), queue claims, pipeline
-      runs (stage timings, spend, outcome), handled delivery and comment
-      ids, workflow label transitions, retro facts. Migrations as numbered
+      runs (stage timings, spend, outcome), poll cursors and `ETag`s, ids
+      already handled, workflow label transitions, retro facts. Migrations as numbered
       scripts run at startup.
 - [ ] `lib/mesthiri/config.sld` — one config file (targets and their rubric
-      paths, App id / key path / webhook secret path, budgets, cadences,
-      pinned pi version, per-target **path denylist**, command permission
-      thresholds, sandbox egress allowlist); `kaappi-cli` for the entry-point
+      paths, App id / key path, poll intervals per event class, budgets,
+      cadences, pinned pi version, per-target **path denylist**, command
+      permission thresholds, sandbox egress allowlist); `kaappi-cli` for the entry-point
       flags. Startup validation rejects a triage target with no rubric path,
       and refuses to start if a denylist is missing where the code stage is
       enabled.
@@ -161,13 +161,17 @@ M3 because triage is worth shipping on its own, and because these three
 modules are a coherent piece of work rather than an appendix to a stage.
 
 - [ ] `lib/mesthiri/event.sld` — one **normalized event** every trigger
-      funnels into (cron tick, queue item, forge event), with delivery
-      behind a **driver**. The polling driver lands here. It arrives with
-      commands rather than with triage on purpose: cron alone would make it
-      a one-consumer abstraction, which is a guess dressed as a design —
-      commands give it a real second shape to satisfy. M6's webhook
-      receiver then slots in as the second delivery driver, and the stages
-      never learn which one woke them.
+      funnels into (cron tick, queue item, polled forge event), so routing
+      and authorization live in one place. It arrives with commands rather
+      than with triage on purpose: cron alone would make it a one-consumer
+      abstraction, which is a guess dressed as a design — commands give it
+      a real second shape to satisfy. Polling is the only delivery
+      mechanism and the interface says so; there is no driver indirection
+      standing in for a second implementation that is never coming.
+- [ ] Comment polling on a cursor with conditional requests (`ETag` →
+      `304` costs no rate limit), watermark advanced only after a command
+      is recorded handled, so a crash mid-command replays rather than
+      loses it.
 - [ ] `lib/mesthiri/command.sld` — `/triage`, `/implement`, `/review`,
       `/fix`, `/retro` parsed by a plain grammar, never by a model.
       Authorized against the **commenter's** permission on the target repo
@@ -210,13 +214,9 @@ comment; a third is tier 2 and waits for a human.
 
 ## M6 — Review + Fix stages
 
-- [ ] Webhook receiver as the **second event driver** behind M4's
-      normalized event: `kaappi-http` server endpoint, HMAC-SHA256 verification of the
-      raw body against the App's webhook secret, delivery-id
-      de-duplication, body-size cap, rapid-fire edits debounced into one
-      run, payloads handed onward as untrusted data. Commands and stages
-      are unchanged by its arrival — that is the test. Public inbound
-      surface, behind a reverse proxy with TLS (M8 provisions it).
+- [ ] Review triggered from polled PR events (opened, synchronized, ready
+      for review) on the same cursor machinery as M4's comment polling —
+      no new transport, no new credential, nothing new listening.
 - [ ] Stale-approval rule enforced: a new commit clears every downstream
       workflow label, so `ready-for-merge` cannot outlive the head that
       earned it.
@@ -243,8 +243,9 @@ comment; a third is tier 2 and waits for a human.
       unit + timer files under `deploy/`.
 - [ ] Server provisioning notes (a small DO droplet suffices); `bwrap`
       present and unprivileged user namespaces enabled; the agent's
-      unprivileged uid; public hostname + TLS termination for the webhook
-      endpoint; secrets layout (App private key and webhook secret on disk,
+      unprivileged uid; **no inbound ports** — the droplet needs no
+      hostname, no TLS termination and no reverse proxy, and its firewall
+      can deny inbound entirely; secrets layout (App private key on disk,
       mode 0600, owned by the service uid and outside the agent's mount
       namespace, never in the store).
 - [ ] Observability: `mesthiri status` reading the store; nightly summary
@@ -254,6 +255,10 @@ comment; a third is tier 2 and waits for a human.
 
 - Concurrent agent runs (a worker pool), justified by real M7 retro timings
   rather than by anticipation.
+- A webhook receiver. Considered and rejected, not postponed — design.md
+  records why. Revisit only if a target appears where poll latency is
+  genuinely unacceptable, and price the public endpoint honestly when you
+  do.
 - Stronger isolation than namespaces (microVM per run) if the threat model
   or the target set outgrows a single-operator droplet.
 - Golden-set evals for triage verdicts and review findings — prompts are
@@ -288,14 +293,19 @@ comment; a third is tier 2 and waits for a human.
 - **Containment is Linux-only**: development on macOS runs the agent
   uncontained. The startup warning is load-bearing; a silent fallback here
   would be worse than no sandbox at all, because it would look safe.
-- **Command latency before M6**: commands arrive by polling until the
-  webhook driver lands, so `/implement` responds on the poll interval, not
-  in seconds. Acceptable; worth saying out loud so it is not mistaken for a
-  bug.
-- **Public inbound surface**: M6's webhook endpoint is the first thing
-  mesthiri exposes to the internet. Signature verification, body-size caps,
-  and delivery de-duplication are part of M6's definition of done, not
-  hardening to add afterwards.
+- **Command latency is permanent**: commands are found by polling, so
+  `/implement` responds on the poll interval — a few minutes, not seconds —
+  and no later milestone changes that. This is the accepted half of the
+  no-receiver trade-off, not a stage on the way to something faster. Say so
+  in the docs, so a slow `/implement` is never mistaken for a bug.
+- **Poll cost and rate limits**: polling trades an inbound endpoint for a
+  steady trickle of outbound reads. An installation gets 5000 requests an
+  hour and conditional requests that return `304` do not count, so the
+  budget is comfortable — but it is finite, and it is shared with every
+  API call the stages make. Poll intervals live in config, the store keeps
+  `ETag`s so unchanged polls stay free, and `mesthiri status` reports
+  remaining limit before a new target is added rather than after it
+  starves an existing one.
 - **Rubric drift**: mesthiri consumes target-repo rubrics; a rubric change
   upstream silently changes behavior — the triage verdict records the
   rubric file's commit hash.
