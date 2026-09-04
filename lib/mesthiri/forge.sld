@@ -20,6 +20,7 @@
   (import (scheme base) (scheme write) (scheme char) (kaappi json))
   (export make-forge forge? forge-auth! forge-rate-limit-remaining
           forge-request forge-get forge-post forge-get-all
+          forge-post-comment
           bearer header-ref link-next
           forge-error? forge-error-status forge-error-url forge-error-body)
   (begin
@@ -98,6 +99,49 @@
     (define (forge-post f path body)
       (let-values (((s h b) (forge-request f "POST" path body)))
         (if (string=? b "") '() (json-read-string b))))
+
+    ;; The one way to post a comment. `marker` is not optional, and that is
+    ;; the whole point: every comment mesthiri writes must carry the marker
+    ;; that lets mesthiri — and the shim — recognise its own voice.
+    ;;
+    ;; Two modules used to call `forge-post` directly with a hand-rolled body
+    ;; and no marker. The consequences were not "an untidy comment":
+    ;;
+    ;;   * The shim skips a run when the comment body contains the marker.
+    ;;     Unmarked, every triage comment cost a full runner job — download
+    ;;     the release, install pi and bubblewrap, start, match nothing, exit.
+    ;;   * Those jobs enter the workflow's per-issue concurrency group. GitHub
+    ;;     keeps only ONE pending run per group, so the no-op evicted a queued
+    ;;     run — and the queued run was a human's `/implement`. The command
+    ;;     was discarded with no comment and no failure; the issue simply sat
+    ;;     there. `cancel-in-progress: false` does not protect against this:
+    ;;     it protects the RUNNING job, not the queued one.
+    ;;   * `event-own-comment?` matches on the same marker, so mesthiri's
+    ;;     second line of defence was blind to those comments too.
+    ;;
+    ;; Hence a required argument rather than a convention: an omission is now
+    ;; a wrong-arity error at the call site, not silence three systems away.
+    (define (forge-post-comment f repo number body marker)
+      (if (not (string? marker))
+          (error "forge-post-comment: every mesthiri comment needs a marker"))
+      (forge-post f (string-append "/repos/" repo "/issues/"
+                                   (number->string number) "/comments")
+                  (string-append "{\"body\":\""
+                                 (json-escape (string-append body "\n\n" marker))
+                                 "\"}")))
+
+    (define (json-escape s)
+      (let loop ((i 0) (acc '()))
+        (if (>= i (string-length s))
+            (list->string (reverse acc))
+            (let ((c (string-ref s i)))
+              (loop (+ i 1)
+                    (cond ((char=? c #\") (append '(#\" #\\) acc))
+                          ((char=? c #\\) (append '(#\\ #\\) acc))
+                          ((char=? c #\newline) (append '(#\n #\\) acc))
+                          ((char=? c #\return) (append '(#\r #\\) acc))
+                          ((char=? c #\tab) (append '(#\t #\\) acc))
+                          (else (cons c acc))))))))
 
     ;; --- pagination -------------------------------------------------------
 

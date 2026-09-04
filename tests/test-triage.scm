@@ -57,7 +57,8 @@
 
 (define v (triage-issue quiet-forge #f "o/r"
                         '(("number" . 412) ("title" . "t") ("body" . "b"))
-                        rubric "8c697da" 'dry-run (agent-returning good)))
+                        rubric "8c697da" 'dry-run (agent-returning good)
+                        "<!-- mesthiri:1 -->"))
 (check "priority comes back" "priority: high" (verdict-priority v))
 (check "tier comes back" 1 (verdict-tier v))
 (check "the rubric SHA is recorded in the verdict" "8c697da" (verdict-rubric-sha v))
@@ -66,13 +67,15 @@
 (check "a verdict missing its tier is refused"
        #t (guard (e ((output-error? e) #t))
             (triage-issue #f #f "o/r" '(("number" . 1)) rubric "x" 'dry-run
-                          (agent-returning '(("priority" . "p") ("rationale" . "r"))))
+                          (agent-returning '(("priority" . "p") ("rationale" . "r")))
+                          "<!-- mesthiri:1 -->")
             #f))
 (check "a tier that is not a number is refused"
        #t (guard (e ((output-error? e) #t))
             (triage-issue #f #f "o/r" '(("number" . 1)) rubric "x" 'dry-run
                           (agent-returning '(("priority" . "p") ("tier" . "one")
-                                             ("rationale" . "r"))))
+                                             ("rationale" . "r")))
+                          "<!-- mesthiri:1 -->")
             #f))
 
 ;; --- dry-run comments, and applies no labels -----------------------------
@@ -88,10 +91,22 @@
                 (values 200 '() "{}"))))
 (set! writes '())
 (triage-issue counting-forge #f "o/r" '(("number" . 5) ("title" . "t") ("body" . "b"))
-              rubric "abc" 'dry-run (agent-returning good))
+              rubric "abc" 'dry-run (agent-returning good) "<!-- mesthiri:77 -->")
 (check "dry-run makes exactly one forge call" 1 (length writes))
 (check "and it is a comment on the issue"
        #t (has? (car (car writes)) "/issues/5/comments"))
+
+;; The marker, which is not cosmetic. The shim skips a run when a comment
+;; body contains it, and `event-own-comment?` matches on it — so an unmarked
+;; comment costs a full runner job AND is unrecognisable to mesthiri as its
+;; own voice. Worse, that no-op job joins the per-issue concurrency group,
+;; and GitHub keeps only one PENDING run per group: on the sandbox an
+;; unmarked triage comment evicted a queued `/implement`, discarding a
+;; human's command with no comment and no failure. `cancel-in-progress:
+;; false` does not help — it protects the running job, not the queued one.
+(check "the comment carries mesthiri's marker"
+       #t (has? (cdr (car writes)) "<!-- mesthiri:77 -->"))
+
 (check "the comment says the verdict was not applied"
        #t (has? (cdr (car writes)) "not applied"))
 ;; The distinction dry-run exists for.

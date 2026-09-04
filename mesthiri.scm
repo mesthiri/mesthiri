@@ -279,9 +279,20 @@
                   " turns=" (run-record-turns rec)
                   " tokens=" (run-record-tokens rec)
                   " model=" (or (run-record-model rec) "-"))
+        ;; Raised, not `die`d. `die` calls `exit`, which no `guard` can
+        ;; catch — so the handler in `run-code-stage` that exists to report
+        ;; an agent failure ON THE ISSUE was dead code for the commonest
+        ;; failure there is. A human typed `/implement`, gpt-4.1-nano spent
+        ;; its 40 turns without settling, and the only trace was a red
+        ;; workflow: nothing on the issue, no reason, nothing to act on.
+        ;; The stage still fails the job — it just tells someone first.
         (if (not (eq? (run-record-outcome rec) 'settled))
-            (die "agent run did not settle: " (run-record-outcome rec)
-                 (agent-failure-detail rec stderr-path)))
+            (let ((msg (string-append
+                        "the agent run did not settle ("
+                        (symbol->string (run-record-outcome rec)) ")"
+                        (agent-failure-detail rec stderr-path))))
+              (log-error msg)
+              (error msg)))
         ;; The agent's reply is the last assistant message. The object is
         ;; extracted rather than assumed: a schema in the prompt does not buy
         ;; a bare JSON reply, and half of the first real verdicts arrived
@@ -293,6 +304,15 @@
 ;; sends someone to the workflow log; `refused` carries pi's own sentence,
 ;; and anything else is worth checking stderr for, because pi is quiet when
 ;; it works.
+;; Whatever a raised object can tell a human. An error object carries a
+;; message; anything else is reported as itself rather than swallowed.
+(define (condition-text e)
+  (cond ((and (error-object? e) (string? (error-object-message e)))
+         (error-object-message e))
+        (else (let ((p (open-output-string)))
+                (write e p)
+                (get-output-string p)))))
+
 (define (agent-failure-detail rec stderr-path)
   (case (run-record-outcome rec)
     ((refused) (string-append " — pi refused it: " (or (run-record-text rec) "")))
@@ -311,7 +331,7 @@
 (define (prioritize-handler forge config event cmd)
   (let* ((repo (event-repo event))
          (mode (stage-mode (config-stage config 'prioritize)))
-         (promoted (prioritize! forge config repo mode)))
+         (promoted (prioritize! forge config repo mode (marker event))))
     (log-info "prioritize " mode ": " (length promoted) " issue(s) promoted")))
 
 ;; The code stage. The gates run in cost order and the agent is the last
@@ -391,8 +411,14 @@
     (let* ((title (let ((t (assoc "title" issue))) (and t (cdr t))))
            (body  (let ((b (assoc "body" issue))) (and b (cdr b))))
            (run (agent-runner config hn pname model workdir trace event))
-           (result (guard (e (#t (list (cons "summary" "the agent run failed")
-                                       (cons "tests_pass" #f))))
+           ;; Report on the issue, then fail the job. Both matter: the
+           ;; comment is what a maintainer sees, the non-zero exit is what
+           ;; stops a failed run being reported as a green one.
+           (result (guard (e (#t (post-comment forge event
+                                               (failure-comment
+                                                "The agent run did not complete."
+                                                (condition-text e)))
+                                 (die "agent run failed; reported on the issue")))
                      (run (code-prompt title body (config-test-command config)))))
            (ok (guard (e ((output-error? e)
                           (list (cons "summary" (output-error-message e))
@@ -748,7 +774,8 @@
       (let ((issue (forge-get forge (string-append "/repos/" repo "/issues/"
                                                    (number->string (event-number event))))))
         (triage-issue forge config repo issue rubric sha mode
-                      (agent-runner config hn pname model workdir trace event))))))
+                      (agent-runner config hn pname model workdir trace event)
+                      (marker event))))))
 
 (define (cmd-dispatch args)
   (let ((ev (load-event)))

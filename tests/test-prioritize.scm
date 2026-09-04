@@ -74,7 +74,7 @@
 (set! writes '())
 (define promoted
   (prioritize! (forge-with "[{\"number\":4,\"labels\":[{\"name\":\"triaged\"}]}]")
-               cfg "o/r" 'dry-run))
+               cfg "o/r" 'dry-run "<!-- mesthiri:9 -->"))
 (check "dry-run promotes nothing to the forge" '() writes)
 (check "but reports what it would have promoted" '(4) promoted)
 

@@ -108,7 +108,7 @@
 
     ;; Promote the head of the queue. In dry-run nothing is written, which is
     ;; asserted rather than assumed.
-    (define (prioritize! forge config repo mode)
+    (define (prioritize! forge config repo mode marker)
       (let* ((order (or (config-priority-order config) '()))
              (ranked (rank-issues (triaged-issues forge repo) order)))
         (let loop ((is ranked) (n 0) (done '()))
@@ -120,10 +120,7 @@
                    (reason (promotion-reason o (+ n 1) order)))
               (cond
                ((eq? mode 'live)
-                (forge-post forge
-                            (string-append "/repos/" repo "/issues/"
-                                           (number->string number) "/comments")
-                            (string-append "{\"body\":\"" (escape reason) "\"}"))
+                (forge-post-comment forge repo number reason marker)
                 (guard (e ((label-error? e) (log-warn (label-error-message e))))
                   (apply-label! forge repo number "triaged" "ready-to-implement")))
                (else

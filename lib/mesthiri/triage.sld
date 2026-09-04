@@ -78,7 +78,7 @@
     ;; `run` is injected: (lambda (prompt) -> parsed JSON object). Stages do
     ;; not spawn anything themselves — that is agent.sld's alone — and it
     ;; means the whole classification path is testable without a model.
-    (define (triage-issue forge config repo issue rubric-text rubric-sha mode run)
+    (define (triage-issue forge config repo issue rubric-text rubric-sha mode run marker)
       (let* ((number (cdr (assoc "number" issue)))
              (title  (let ((t (assoc "title" issue))) (and t (cdr t))))
              (body   (let ((b (assoc "body" issue))) (and b (cdr b))))
@@ -97,18 +97,12 @@
           ;; reached a verdict, and left no trace of it anywhere the reader
           ;; would look. `verdict->comment` already rendered the dry-run
           ;; wording; nothing called it.
-          (forge-post forge
-                      (string-append "/repos/" repo "/issues/"
-                                     (number->string number) "/comments")
-                      (json-body (verdict->comment v #t)))
+          (forge-post-comment forge repo number (verdict->comment v #t) marker)
           (log-info "issue " number " -> " (verdict-priority v)
                     " (tier " (verdict-tier v) ") [dry-run: commented, no labels]")
           v)
          ((eq? mode 'live)
-          (forge-post forge
-                      (string-append "/repos/" repo "/issues/"
-                                     (number->string number) "/comments")
-                      (json-body (verdict->comment v #f)))
+          (forge-post-comment forge repo number (verdict->comment v #f) marker)
           ;; Exactly one priority label, and the workflow label moves too.
           (forge-post forge
                       (string-append "/repos/" repo "/issues/"
