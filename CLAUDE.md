@@ -74,7 +74,9 @@ symlink and would overwrite everything here.
   Neither step catches a malformed `classDef` or `style`; mermaid ignores
   those silently, so a fill that never appears is on you to notice.
   The script's comments explain the jsdom setup, which is fiddly in three
-  ways that each fail looking like something else.
+  ways that each fail looking like something else. CI runs the same script
+  on any push or pull request touching `docs/`, so this is enforced rather
+  than advisory — running it locally just saves you the round trip.
 
 ## Related work
 
