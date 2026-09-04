@@ -9,29 +9,39 @@ an orchestrator that directs headless coding agents through the software
 development lifecycle, while humans set direction, define guardrails, and
 review outcomes.
 
-## Status: pre-alpha (design settled, implementation unblocked)
+## Status: pre-alpha (design settled, nothing runs yet)
 
-Nothing runs yet, but nothing is waiting on the platform anymore. The
-design is settled (see [docs/design.md](docs/design.md)), and the project's
-subprocess needs drove
+The design is settled (see [docs/design.md](docs/design.md)) and
+[docs/plan.md](docs/plan.md) sequences the work, but there is no code in
+this repository yet. The project's subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
 — native `(kaappi process)` support — which **shipped in Kaappi v0.26.0**
-(all four phases; the KEP is Final). mesthiri therefore requires
-**Kaappi ≥ 0.26** and builds directly on `spawn-process`/`run-process`.
-[docs/plan.md](docs/plan.md) sequences the work: agent integration first,
-then triage — the triage stage's job is verifying an issue's claims against
-the code, and that needs the agent underneath it.
+(all four phases; the KEP is Final), so mesthiri requires **Kaappi ≥ 0.26**
+to build.
+
+You will not need Kaappi to *use* it. mesthiri compiles to a standalone
+binary that a workflow in your repository downloads and runs.
+
+### Inspired by fullsend
+
+The CI-native execution model here is learned from
+[fullsend](https://fullsend.sh) — an Apache-2.0 Go project pursuing the same
+goal at far larger scale, with multi-forge support, org-wide installation
+and shared infrastructure mesthiri does not attempt. mesthiri is an
+independent implementation in Kaappi Scheme rather than a port: no fullsend
+code, schema or prose is copied, and mesthiri stays MIT. If you want this
+capability in production today, look at fullsend first.
 
 ## The pipeline
 
 | Stage | Trigger | What it does |
 |---|---|---|
-| **Triage** | cron | Classify incoming issues, verify their claims, apply priority labels per the project's rubric |
-| **Prioritize** | cron | Score and rank the ready backlog |
-| **Code** | queue | Pick up a ready issue, drive a coding agent to a tested implementation, then push and open the PR from outside the sandbox |
-| **Review** | PR event | Multi-dimensional review: correctness, security, performance, intent alignment |
+| **Triage** | issue events + schedule | Classify incoming issues, verify their claims, apply priority labels per the project's rubric |
+| **Prioritize** | schedule | Score and rank the ready backlog |
+| **Code** | label or command | Drive a coding agent to a tested implementation, then push and open the PR from outside the sandbox |
+| **Review** | PR events | Multi-dimensional review: correctness, security, performance, intent alignment |
 | **Fix** | review findings | Apply findings, push, re-run tests until clean |
-| **Retro** | cron | Analyze completed workflows, file process-improvement proposals |
+| **Retro** | schedule | Analyze completed runs, file process-improvement proposals |
 
 Every stage can also be run on demand with a slash command (`/triage`,
 `/implement`, `/review`, `/fix`, `/retro`) by someone whose permission on the
@@ -39,24 +49,23 @@ repo covers it.
 
 ## Architecture (one paragraph)
 
-Diagrams — trust zones, the credential boundary, the label state machine —
-are in [docs/architecture.md](docs/architecture.md).
+Diagrams — trust zones, the dispatch path, the credential boundary, the
+label state machine — are in
+[docs/architecture.md](docs/architecture.md).
 
-
-A single Kaappi program, compiled to a standalone binary
-(`zig build -Dbundle-src=`), running under systemd on a server. Fibers +
-reactor timers drive the cron stages; a worker fiber drives a headless coding
-agent — [pi](https://pi.dev/) first, via its `--rpc` JSON-over-stdio mode —
-one run at a time, each inside a namespace sandbox whose only writable path
-is that run's scratch clone; pipeline state lives in SQLite, while workflow
-state lives in labels a human can read and change. The forge is reached
-through its REST API, authenticated as a GitHub App you register and install
-on your own repos; stages are woken by cron, by the queue, or by a slash
-command from someone with the repo permission to issue it. Every event is
-found by polling — mesthiri makes outbound requests and nothing listens, so
-the server it runs on needs no hostname, no TLS, and no open inbound port.
-Guardrails are structural: the App has no merge permission, the agent holds
-no credential and has no route to the forge — the service reads its diff and
+There is no server and no database. A thin shim workflow in your repository
+subscribes to native forge events and a schedule, and calls a reusable
+workflow that downloads one checksummed Kaappi-compiled binary and runs
+`mesthiri dispatch`: normalize the event, authorize it against the
+commenter's own permission, match it to exactly one stage, run that stage in
+that job. The coding agent — [pi](https://pi.dev/) first, via its `--rpc`
+JSON-over-stdio mode — runs inside a namespace sandbox within the job, with
+the scratch clone as its only writable path. State lives in the repository:
+workflow state in labels a human can read and change, cursors in a file on a
+state branch, run history in your CI's own run history. Guardrails are
+structural: no App holds merge permission, the shim uses
+`pull_request_target` and never checks out a PR's code, the agent holds no
+credential and has no route to the forge — it writes commits and the job
 does the pushing — its output is schema-checked outside itself, a path
 denylist and intent tier decide what it may attempt at all, commits are
 signed off by the accountable human and disclose the machine that wrote
@@ -73,13 +82,14 @@ them, and every run has a token/turn budget and a kill-the-tree timeout.
 4. **Budgets everywhere.** Per-run and per-night caps on agent spend.
 5. **Bring your own agent.** The coding agent is a subprocess speaking a
    small protocol; pi is the first backend, not the only possible one.
-6. **Self-hosted.** You run the service and hold its credentials. There is
-   no hosted mesthiri to sign up for.
+6. **No new infrastructure.** Your CI is already the event receiver, the
+   scheduler and the compute plane. A daemon would reproduce all three
+   worse, and ask you to operate a server as well.
 7. **Contain the agent.** Prompt wording is not a security boundary. The
    sandbox decides what a subverted run can reach; everything else is
    defence in depth.
-8. **Nothing listens.** Outbound HTTPS only. The cheapest attack surface to
-   secure is the one that does not exist.
+8. **The repository is the coordinator.** State a human can read in the
+   forge beats state in a database only mesthiri can see.
 
 ## License
 

@@ -1,377 +1,305 @@
 # mesthiri — design
 
-Status: draft, 2026-08-29 (revised 2026-09-04: GitHub App identity, serial
-execution, rubric location; then agent containment, command surface,
-eligibility policy, output validation). Distilled from the research and design discussion
-that produced [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md);
-this document records the decisions so the repo is self-explaining.
-[architecture.md](architecture.md) draws the same system as diagrams.
+Status: draft, 2026-08-29; substantially revised 2026-09-04, when the
+execution model changed from a self-hosted service to CI-native dispatch.
+This document is the design authority — [plan.md](plan.md) sequences it and
+[architecture.md](architecture.md) draws it.
+
+**Inspiration.** The CI-native execution model, the layered install, the
+per-role identity split and the harness-as-configuration idea are all
+learned from [fullsend](https://fullsend.sh), an Apache-2.0 Go project
+pursuing the same goal at much larger scale. mesthiri is an independent
+implementation in Kaappi Scheme, not a port: no fullsend code, schema or
+prose is copied, and mesthiri stays MIT. Where fullsend reached a
+conclusion first, this document says so.
 
 ## What mesthiri is
 
-An Agentic Development Lifecycle (ADLC) orchestrator: a long-running service
-that executes the stages of the software development lifecycle with
-autonomous coding agents, for any Git-hosted project, while humans set
-intent, define guardrails, and review outcomes. The model follows the
-published ADLC literature (agents execute; humans direct) and the working
-precedent of fullsend.sh's six-stage pipeline, but is:
+An Agentic Development Lifecycle (ADLC) orchestrator: agents execute the
+stages of the software development lifecycle for a Git-hosted project while
+humans set intent, define guardrails, and review outcomes. It is:
 
-- **self-hosted**: you run the service and its database on your own
-  server, and it talks to the world over outbound HTTPS only — nothing
-  listens. Identity is a GitHub App *you* register and install on *your*
-  repos; there is no hosted multi-tenant service, no cloud sandbox
-  provider, and no vendor to enroll with;
+- **CI-native**: there is no service, no server and no database. mesthiri is
+  a single standalone binary that a workflow in your repository downloads
+  and runs. Your CI is the event receiver, the scheduler and the compute
+  plane, because it already is all three for your tests;
 - **written in Kaappi Scheme**, dogfooding the language and its ecosystem
-  libraries (`kaappi-http`, `kaappi-json`, `kaappi-sqlite`, `kaappi-log`,
-  `kaappi-cli`, fibers);
+  (`kaappi-http`, `kaappi-json`, `kaappi-cli`, `kaappi-log`), and compiled
+  with `zig build -Dbundle-src=` so a target repository needs a binary, not
+  a Kaappi installation;
 - **agent-agnostic**: the coding agent is a subprocess speaking JSON over
-  stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`,
-  MIT-licensed, minimal harness); the interface is small enough that other
-  headless agents can slot in.
+  stdio. The first backend is [pi](https://pi.dev/) (`pi --rpc`); the
+  interface is small enough that other headless agents can slot in.
 
-## Stage design
+### Why not a long-lived service
 
-The service is one process. Cron stages are reactor timers; the code stage
-is driven by a queue. **Exactly one agent run is in flight at a time,
-process-wide** — serial execution is the design, not a temporary
-simplification: it makes budget accounting, scratch-directory isolation, and
-forge rate-limit behaviour trivially correct. A worker pool is a later
-change, justified by real timings from the retro stage.
+An earlier revision of this document specified a systemd service on a
+droplet, polling the forge and keeping state in SQLite. It was replaced
+because nearly everything it needed, the target repository's CI already
+provides and already secures: ephemeral compute, native event delivery,
+scheduled runs, secret storage, an audit trail, and an isolation boundary
+that is rebuilt from scratch for every job. A daemon reproduces those
+badly, adds a server to operate and patch, and asks the operator to trust
+one more thing. The trade is that mesthiri now depends on the forge's CI
+rather than standing alone — which is a real dependency, and a fair price
+for deleting a server.
 
-Serial does not mean single-target. Several repos are polled each cycle and
-served **round-robin**, so a busy repo cannot starve a quiet one — fairness
-is in the queue from the beginning rather than retrofitted into one that
-assumed a single target. Rate limit and nightly budget are shared across
-targets and accounted per target.
+## Execution model
 
-1. **Triage** (cron): poll open issues since the last cursor; for each,
-   verify the issue's claims against the code before trusting them
-   (diagnosis in an issue is a hypothesis, not a fact); propose exactly one
-   priority label per the target project's documented rubric; post label +
-   one-paragraph rationale. Never edits code.
-2. **Prioritize** (cron): rank triaged issues into a ready queue
-   (RICE-style scoring where the project has no rubric of its own).
-3. **Code** (queue-driven): claim a ready issue; clone into a scratch
-   worktree; drive the agent to a tested implementation; run the *project's
-   own* test command. The agent writes commits in its clone and stops
-   there — **the service pushes**, because the agent holds no credential
-   and has no network path to the forge (see *Agent containment*). Between
-   the two sits the eligibility check: the service reads the finished diff,
-   refuses it if it touches a denied path, and only then pushes the branch
-   and opens the PR. One issue, one PR.
-4. **Review** (PR events, discovered by polling): dimensions — correctness,
-   security, performance, intent alignment — each an independent agent pass;
-   findings verified adversarially before posting (a finding that cannot
-   survive a refutation attempt is not posted).
-5. **Fix** (review findings): apply findings, push, re-run tests; iterate
-   to a bounded depth, then hand to a human.
-6. **Retro** (cron): mine completed pipeline records (timings, iteration
-   counts, failure classes) and file improvement proposals as issues on
-   mesthiri — where a human picks them up, since mesthiri is not a target
-   of its own pipeline (see *Non-goals*).
+```
+forge event ──► shim workflow ──► reusable workflow ──► mesthiri dispatch
+                (in your repo)     (from mesthiri)       (one binary)
+                                                              │
+                                          normalize ──► authorize ──► match
+                                                                        │
+                                                              run one stage
+```
 
-## Triggers and the command surface
+**The shim** is a thin workflow committed to the target repository. It
+subscribes to native triggers (`issues`, `issue_comment`, `pull_request`,
+`pull_request_review`) plus a `schedule` for the cron stages, and does
+nothing but call the reusable workflow. It is deliberately small so that
+upgrades ship upstream rather than through a pull request to every repo.
 
-Stages are reached three ways, and all three arrive as the same
-**normalized event** so routing logic lives in one place:
+**PR events use `pull_request_target`, and the shim never checks out the
+pull request's code.** A workflow triggered by `pull_request` runs the
+version of itself from the PR's own branch, so anyone opening a PR could
+rewrite it and read the secrets it holds. `pull_request_target` runs the
+base branch's copy instead. This is fullsend's ADR 0009 and it is not
+optional; getting it wrong hands credentials to anyone who can open a pull
+request.
 
-- **cron** — reactor timers for triage, prioritize, retro;
-- **queue** — the code stage draining ready work;
-- **commands** — a human typing `/triage`, `/implement`, `/review`, `/fix`
-  or `/retro` in an issue or PR comment.
+**The reusable workflow** comes from this repository, downloads the pinned
+mesthiri release binary, verifies its checksum, and runs it. Infrastructure
+fixes therefore reach every installed repo without an install step.
 
-Commands are parsed **deterministically** — a plain grammar, never a model —
-so an issue body cannot talk the parser into a command it did not contain.
-Every command is authorized against the **commenter's** permission on the
-target repository, fetched from the forge, not against mesthiri's own: a
-mutating command (`/implement`, `/fix`) requires write or better, a
-read-only one (`/triage`, `/review`) requires triage or better, and an
-unauthorized command is answered with a refusal comment rather than
-silence. Commands are further restricted to the entity where their inputs
-exist — `/implement` on an issue, `/fix` on a PR — and de-duplicated by
-comment id so a re-delivered event cannot run a stage twice.
+**`mesthiri dispatch`** normalizes the CI event into one shape, authorizes
+it, matches it against the configured stage triggers, and runs the single
+matching stage in that job. One event, one stage, one job.
 
-Events are discovered by **polling** the forge on a cursor. mesthiri makes
-outbound requests and accepts no inbound ones; there is no webhook receiver
-and no listening socket (see below). Stages consume the normalized event
-and never see how it was found.
+## Stages
 
-## Forge identity and event discovery
+1. **Triage** (scheduled + on issue events): verify the issue's claims
+   against the code before trusting them — a diagnosis in an issue is a
+   hypothesis, not a fact — classify per the target's own rubric, and
+   propose exactly one priority label with a one-paragraph rationale. Never
+   edits code.
+2. **Prioritize** (scheduled): rank triaged issues into a ready queue.
+3. **Code** (label or command): implement, run the *project's own* test
+   command, open a PR. One issue, one PR.
+4. **Review** (PR events): correctness, security, performance and intent
+   alignment as independent passes; findings verified adversarially before
+   posting, because a finding that cannot survive a refutation attempt is
+   noise.
+5. **Fix** (review findings): apply, push, re-run tests, to a bounded depth,
+   then hand to a human.
+6. **Retro** (scheduled): mine completed runs for timings, iteration counts
+   and failure classes, and file improvement proposals as issues.
 
-mesthiri authenticates as a **GitHub App** that the operator registers and
-installs on the repos it should work on. The App is the primary and default
-credential path; it acts as `mesthiri[bot]` with no human machine account
-behind it, its permissions are declared once and reviewable, and its
-installation is scoped to selected repositories.
+## State without a database
 
-- **Token minting**: sign a short-lived JWT with the App's private key
-  (RS256), exchange it for an installation access token, cache the token
-  until shortly before its expiry, refresh transparently. All of this lives
-  behind `forge.sld`'s **credential provider** interface, so a personal
-  access token provider remains available for local development and
-  fixture work without stage code knowing the difference.
-- **How the signature is made**: RS256 does not exist in the Kaappi
-  ecosystem, and mesthiri does not add it. The signing input goes over
-  stdin to a one-shot `openssl dgst -sha256 -sign` through the same
-  `run-process` path that already drives `git` — the key is passed
-  as a file path, never on argv, and never leaves the host. Base64url is
-  about twenty-five lines of Scheme, since kaappi core does not export
-  base64 either. That is the whole of it: no `kaappi-crypto` dependency, no
-  cross-repo release on the critical path, and one more binary to have
-  installed. OpenSSL is already a system dependency here — `kaappi-net`
-  links it for TLS — so this asks for the CLI that normally ships beside
-  the library rather than for anything new.
-- **Events**: found by polling, not delivered. A cursor per target and per
-  event class (issues, issue comments, pulls, reviews) advances on a
-  watermark; conditional requests carry the previous `ETag`, so an
-  unchanged poll returns `304` and costs nothing against the rate limit.
-  Work already handled is de-duplicated by issue, comment and commit id in
-  the store, so a re-read is idempotent. The App is registered **without a
-  webhook URL**, which means there is no webhook secret to hold and one
-  fewer credential on disk.
+The repository is the coordinator. This is the part of the CI-native model
+that looks like a loss and is mostly a gain: state that lives in the forge
+is state a human can read, audit and correct without shell access.
 
-### Why no webhook receiver
+- **Workflow state lives in labels**: `ready-for-triage`, `triaged`,
+  `ready-to-implement`, `in-progress`, `ready-for-review`, `needs-fix`,
+  `ready-for-merge`, `needs-human`. Transitions are guarded, states are
+  mutually exclusive, and a write is read back to confirm it took. **A new
+  commit clears every downstream label**, so an approval cannot outlive the
+  head that earned it.
+- **Idempotency** comes from the forge, not from a lock table: a job checks
+  whether it has already acted on this comment, commit or event id before
+  acting, and CI concurrency groups collapse rapid-fire edits into one run.
+  Every handler is written to be safe to run twice, because it will be.
+- **Cursors and watermarks** for the scheduled sweeps live in a small JSON
+  file on an orphan `mesthiri-state` branch, updated with write-then-verify.
+  Durable, diffable, and requiring no infrastructure.
+- **Run history** is CI run history. Retro reads completed workflow runs and
+  the JSONL trace each stage uploads as an artifact, rather than a table it
+  maintained itself.
 
-A receiver was considered and rejected. Webhooks buy low latency, and
-mesthiri has little use for it: three of its six stages run on cron, two
-more are driven by its own queue rather than by anything arriving from
-outside, and only review waits on an external event. That plus commands is
-the whole latency-sensitive surface, and both are answered well enough on a
-poll interval measured in a few minutes. Against that, a receiver costs a
-public inbound endpoint on the operator's server, a hostname and TLS
-termination in front of it, signature verification, replay and body-size
-handling, and a second credential to store — all of it exposed to the
-internet, on a service whose entire threat model is about not trusting what
-arrives from outside. Polling also fails better: a webhook missed while the
-droplet reboots is gone (and GitHub disables an endpoint that keeps
-failing), whereas a poll re-reads the source of truth and catches up on its
-own. The trade-off accepted is latency and a steady trickle of API reads;
-the trade-off refused is being reachable from the internet at all.
+The honest cost is spend accounting. A per-run budget is exact, because the
+run enforces it on itself. A per-day cap across runs needs shared state, and
+the state branch gives an approximate one — good enough to stop a runaway,
+not precise under concurrent jobs. That imprecision is accepted; the
+alternative was a database, and the database was the thing being deleted.
 
-This is the same conclusion other ADLC orchestrators reach, though by a
-different route: a project built on hosted CI can make the CI system itself
-the receiver, with a thin workflow in each target repo forwarding native
-events inward. That option is not open to a long-lived service on a
-droplet — a shim would have nowhere to forward *to* except an inbound
-endpoint, which is the thing being avoided — so mesthiri polls for
-everything rather than for some things.
+## Configuration
+
+Configuration lives in the target repository under `.mesthiri/`, so a
+repository carries its own policy and a fork carries a copy. It is
+S-expressions read with `read` — no parser, no dependency, and the obvious
+choice in a Scheme project, at the cost of being less familiar to a
+maintainer who expected YAML.
+
+- `.mesthiri/config.scm` — targets, rubric path, budgets, denylist, command
+  permissions, pinned agent version, operator identity.
+- `.mesthiri/harness/<role>.scm` — one file per agent role: system prompt,
+  allowed tools, model and effort, budgets, sandbox policy. A role is
+  configured in one reviewable file rather than scattered across workflow
+  YAML, which is fullsend's harness idea (their ADR 0024).
+
+**Trigger expressions** decide which stage an event runs. They are
+predicates over the normalized event, written in a small s-expression
+language — `(and (event-type? 'issue-comment) (command? "/implement"))` —
+**interpreted, never `eval`ed**. The config comes from the repository's base
+branch and is maintainer-controlled, but an interpreter over a fixed
+predicate vocabulary cannot be talked into arbitrary execution, and `eval`
+can.
+
+## Identity
+
+mesthiri authenticates as GitHub Apps that the operator registers and
+installs. Permissions are split by role, following fullsend's ADR 0007:
+a **reader** App for triage and review, which cannot write code, and a
+**writer** App for code and fix. Compromising the reviewer's credential
+then grants nothing the reviewer did not already have.
+
+The App private key is a repository or organization secret; the workflow
+mints a short-lived installation token per run. Minting needs an RS256 JWT,
+which the Kaappi ecosystem does not provide, so `jwt.sld` signs with a
+one-shot `openssl dgst -sha256 -sign` through `run-process`: signing input
+on stdin, key as a file path, never on argv. There is deliberately no
+central token-mint service — fullsend needs one because it serves many
+organizations; a single operator does not.
+
+## Agent execution and containment
+
+The CI runner is already an ephemeral, isolated VM, which is most of the
+isolation a daemon had to build. It is not all of it: the runner also holds
+the job's credentials, and the agent is driven by attacker-writable issue
+text. So within the job, `agent.sld` — the only module that may spawn the
+agent — wraps it in a namespace sandbox: read-only root, the scratch clone
+as the only writable mount, the token and key file outside the mount
+namespace entirely, network egress denied by default with an allowlist that
+**excludes the forge**, and a separate unprivileged uid.
+
+**The agent writes; the job pushes.** The agent produces commits in its
+clone and exits. The job, outside the sandbox, reads the finished diff,
+checks it against the eligibility rules, and only then pushes and opens the
+PR. The agent holds no credential and has no route to the forge, so this is
+the only path a change can take — the eligibility check sits *on* it rather
+than beside it. A compromised agent can produce a bad diff, which is what
+review is for, but it cannot deliver one.
+
+**Output validation**: everything the agent returns is checked against a
+declared schema outside the agent, with capped retries and then hard
+failure. No unvalidated or merely plausibly-shaped output reaches stage
+code. fullsend enforces this at the harness level (their ADR 0022) for the
+same reason.
+
+## Eligibility: what mesthiri may attempt
+
+Branch protection stops a bad change merging; it says nothing about what
+should be attempted. Two checks run before an agent is spawned:
+
+- **A path denylist**, per repository, of files no mesthiri change may
+  touch: auth and policy code, public API surface, deploy and CI
+  definitions, ownership files, `.mesthiri/` itself. Enforced when the job
+  reads the diff, and again as an automatic escalation in review.
+- **An intent tier**: 0 pre-authorized and trivially revertible, 1 a single
+  issue suffices, 2 a human must explicitly authorize before the code stage
+  may claim it. Triage proposes a tier; only a human raises the ceiling.
+  Review re-derives it from the diff independently, so a change that grew
+  past its authorization is caught by someone other than its author.
+
+## Commands
+
+`/triage`, `/implement`, `/review`, `/fix`, `/retro` in an issue or PR
+comment. Parsed by a plain grammar, never by a model. Authorized against
+**the commenter's** permission on the repository — write or better to
+mutate, triage or better for read-only — and restricted to the entity where
+their inputs exist, so `/implement` is an issue command and `/fix` is a PR
+command (fullsend's ADR 0076 reaches the same split). An unauthorized
+command gets a refusal comment, not silence.
 
 ## Rubrics
 
 Triage rubrics live **in the target repository**, at a path named in
-mesthiri's per-target config (the first target is the kaappi org's
-`docs/dev/github-issues.md`). mesthiri consumes the rubric a project already
-maintains; it does not author policy for projects it does not run. A target
-with no rubric file is not eligible for triage, and that is a startup
-configuration error rather than a silent fallback. Every triage verdict
-records the commit SHA of the rubric it was decided under, so an upstream
-rubric change is visible as a behaviour change instead of a mystery.
-
-## Eligibility: what mesthiri may attempt
-
-Branch protection stops a bad change from *merging*. It says nothing about
-what mesthiri should try in the first place, and an orchestrator that
-attempts anything an issue asks for is one well-written issue away from
-proposing a change to its own guardrails. Two mechanisms decide eligibility
-*before* an agent is spawned:
-
-- **A path denylist**, per target, of files no mesthiri-authored change may
-  touch: auth and policy code, public API surface, deploy and CI
-  definitions, ownership files, and mesthiri's own configuration. Enforced
-  twice — the code stage refuses to open a PR whose diff touches a denied
-  path, and the review stage treats such a diff as an automatic escalation.
-- **An intent tier** on the issue, deciding whether the issue alone is
-  sufficient authorization to act. Tier 0 (pre-authorized, additive,
-  trivially revertible — typos, doc fixes), tier 1 (a single issue
-  suffices — the ordinary bug fix), tier 2 (a human must say so explicitly
-  before the code stage may claim it — features, migrations, anything
-  cross-cutting). Triage assigns a proposed tier; only a human can raise
-  the ceiling. The review stage re-derives the tier independently from the
-  diff, so a change that grew past its authorization is caught by someone
-  other than the agent that wrote it.
-
-Neither mechanism is a substitute for review; both exist so that review is
-not the *only* thing standing between an issue and a change.
+`.mesthiri/config.scm` — the first target is the kaappi org's
+`docs/dev/github-issues.md`. mesthiri consumes the rubric a project already
+maintains rather than authoring policy for projects it does not run. A
+target with no rubric file is not eligible for triage, and that is a
+configuration error rather than a silent fallback. Every verdict records the
+rubric's commit SHA, so an upstream rubric change reads as a behaviour
+change instead of a mystery.
 
 ## Attribution and sign-off
 
-Every commit mesthiri makes carries a DCO `Signed-off-by`, and it names
-**the operator** — the human who registered the App, configured the target
-and runs the instance — from an explicit `operator:` field in config, never
-inferred from the host's git config or from the App.
+Every commit carries a DCO `Signed-off-by` naming **the operator** — the
+human who registered the Apps and installed mesthiri on the repository —
+from an explicit `operator:` field, never inferred.
 
-The reasoning matters more than the mechanism, because the DCO's text does
-not anticipate this case. Its clauses assume a human chain: (a) I wrote it,
-(b) it derives from compatible prior work, (c) a *person* who certified one
-of those handed it to me unmodified. An agent is not a person, so (c) does
-not apply, and the only clause that fits is (a) — the operator treating the
-agent as a tool they used, exactly as they would a code generator or a
-compiler. That reading is available only to someone actually accountable
-for the output, which is why the sign-off cannot be delegated to
-`mesthiri[bot]`: a certification with no person behind it certifies
-nothing.
+The DCO's text does not anticipate this case. Its clauses assume a human
+chain: I wrote it, it derives from compatible prior work, or a *person* who
+certified one of those handed it to me unmodified. An agent is not a person,
+so the third does not apply, and the only clause that fits is the first —
+the operator treating the agent as a tool they used, as they would a code
+generator. That reading is available only to someone accountable for the
+output, which is exactly why the sign-off cannot be delegated to a bot: a
+certification with no person behind it certifies nothing.
 
-What the operator is asserting is provenance and licensing — that this
-contribution is theirs to offer under the project's licence — not that they
-have read every line. Reading is what the review stage and the human merge
-gate are for, and the disclosure below exists so no reviewer is misled
-about which is which.
-
-Three trailers, and the shape is not arbitrary:
+The operator asserts provenance and licensing, not that they read every
+line; reading is what review and the human merge gate are for. Three
+trailers, and the shape is not arbitrary:
 
 ```
 Signed-off-by: Operator Name <operator@example.org>
 Co-authored-by: mesthiri[bot] <…+mesthiri[bot]@users.noreply.github.com>
-Generated-by: mesthiri <version>; agent <backend> <version>; run <run-id>
+Generated-by: mesthiri <version>; agent <backend> <version>; run <run-url>
 ```
 
-The commit **author** is the operator too, because DCO checkers compare the
-sign-off against the author and reject a mismatch — a bot-authored commit
-signed by a human fails the very check it was meant to satisfy. Machine
-authorship is not thereby hidden: the co-author trailer states it, the
-`Generated-by` trailer names the backend and links the pipeline run that
-produced it, the PR body says so in prose, and GitHub shows
-`mesthiri[bot]` as the pusher regardless.
-
-Fail closed: with no `operator:` configured, mesthiri refuses to start when
-any target has the code stage enabled. Guessing an identity to sign with is
-the one failure mode here that would be worse than not running.
-
-## Process supervision
-
-The agent and git are both subprocesses, supervised through
-`(kaappi process)` (KEP-0022, **shipped in kaappi v0.26.0** — the KEP is
-Final; mesthiri requires kaappi ≥ 0.26). Every requirement mesthiri stated
-is met by what shipped:
-
-- streaming bidirectional pipes as fiber-parking ports (`pi --rpc` is a
-  long-lived JSON event stream) — `spawn-process` with `'pipe` specs;
-- Python's timeout contract (`process-wait 'timeout:` leaves the child for
-  the caller to kill and drain) and **tree-kill** — `new-group: #t` +
-  `process-kill 'group: #t` (a process group on POSIX, a Job Object on
-  Windows), so an agent's own bash children die with it;
-- argv-only spawning — issue text is untrusted and must never reach a
-  shell (the library has no shell mode at all);
-- budgets: wall-clock timeout per run, token/turn budget passed to the
-  agent, per-night caps per stage.
-
-Two shipped details stage code should assume: long-lived agent runs use
-`spawn-process` (drive stdin/stdout from fibers, `process-wait` with a
-deadline, group-kill on expiry); one-shot tool calls (`git`, `openssl`) use
-`run-process`, whose `timeout:` implies `new-group: #t` and kills with
-SIGKILL, and whose stdin defaults to `'null` unless `input:` is given.
-
-An earlier revision of this document specified a socat shim as an interim
-transport while KEP-0022 was unreleased; it was never built and is no
-longer needed. The one-module rule survives it for a different reason:
-`lib/mesthiri/agent.sld` isolates the *agent protocol* (spawn arguments,
-RPC framing, budget enforcement), so a second agent backend is a new
-module, not a change to stage code.
-
-## Agent containment
-
-Supervision bounds how *long* an agent runs and kills its children when the
-deadline passes. It does not bound what the agent can reach while it runs,
-and mesthiri's threat model demands that it must: the agent is driven by
-attacker-writable issue text, and it runs on the same host as the App
-private key. Tree-kill after the fact is not containment.
-
-So the agent is spawned inside a **sandbox** — Linux namespaces via
-`bwrap`/`unshare`, wrapped by `agent.sld` and by nothing else, so a stage
-cannot spawn an unsandboxed agent even by mistake:
-
-- read-only root filesystem;
-- the run's scratch clone as the only writable mount, and the *only* part of
-  the host filesystem the agent can see at all;
-- the secrets directory (App private key, cached tokens) outside the mount
-  namespace entirely — unreachable rather than merely unreadable;
-- network egress restricted to what the run needs (the target's package
-  registries, the model endpoint), denied by default — **the forge is not
-  on that list**: the agent neither pushes nor calls the API, because it
-  has no credential to do either with;
-- a separate unprivileged uid, so a namespace escape still lands somewhere
-  that owns nothing.
-
-This is why the code stage splits in two. The agent writes commits into
-its clone and exits; the service, outside the sandbox, reads the resulting
-diff, applies the eligibility rules to it, and does the pushing. A
-compromised agent can therefore produce a bad diff — which is what review
-is for — but it cannot deliver one anywhere by itself.
-
-Blast radius is then what the sandbox permits, which is the point. The
-sandbox is a Linux-only mechanism; on a developer's macOS machine mesthiri
-runs the agent uncontained and says so loudly at startup, because a
-development convenience that fails silently in production is worse than no
-convenience at all.
-
-## Output validation
-
-Everything an agent returns is validated against a declared schema
-**outside the agent** before any stage code reads it: a triage verdict, a
-review finding, a tier re-derivation. Validation failure is retried a
-capped number of times and then fails the run — no unvalidated,
-partially-parsed, or plausibly-shaped output flows downstream. The agent
-proposes; `agent.sld` decides whether what came back is even the right
-shape to consider.
-
-## State
-
-SQLite (`kaappi-sqlite`): issues seen, triage verdicts, queue claims,
-pipeline runs (per-stage timings, agent spend, outcomes), poll cursors and
-`ETag`s, ids already handled, retro facts. The database is mesthiri's own
-state, and the service is restartable at any point.
-
-Workflow state, though, lives where humans can see it: **in labels on the
-target repo**. `ready-for-triage`, `ready-to-implement`, `ready-for-review`,
-`ready-for-merge`, `needs-human`, `blocked`. Transitions are guarded — only
-declared moves are legal, the states are mutually exclusive, and a
-transition is written then read back to confirm it took. The rule that
-earns the machine its keep: **a new commit clears every downstream label**,
-so a `ready-for-merge` earned by one head cannot survive the push that
-invalidated it. A human reading the issue can see what mesthiri thinks
-without reading mesthiri's database, and can change it by changing a
-label.
+The commit **author** is the operator too, because DCO checkers compare
+sign-off against author and reject a mismatch — a bot-authored commit signed
+by a human fails the very check it was meant to satisfy. Machine authorship
+is disclosed rather than hidden, by the trailers, by the PR body, and by
+the App showing as the pusher. With no `operator:` configured, the code
+stage refuses to run.
 
 ## Guardrails (structural, not aspirational)
 
 | Guardrail | Mechanism |
 |---|---|
-| Humans gate merges | the App has no merge permission; branch protection stays on |
-| Sign-off | every commit signed off by the configured operator, who is accountable for it; never by the bot |
-| Disclosure | co-author and `Generated-by` trailers name the machine and link the run; the PR body says so in prose |
-| Untrusted input | issue/PR text is data; prompts label it as such; no shell ever sees it |
-| Agent containment | agent runs in a namespace sandbox: read-only root, scratch clone the only writable mount, secrets outside the namespace, egress denied by default |
-| Output validation | agent output schema-checked outside the agent; capped retries then hard fail |
-| Command authorization | commands parsed deterministically and authorized against the *commenter's* repo permission |
-| Eligibility | path denylist and intent tier checked before an agent is spawned, not at merge time |
+| Humans gate merges | no App holds merge permission; branch protection stays on |
+| Least privilege | reader and writer Apps, installed per repository, short-lived tokens |
+| Shim cannot be hijacked | `pull_request_target`, and the PR's code is never checked out by it |
+| Agent containment | namespace sandbox inside the runner; credentials outside its mount namespace; forge off its egress allowlist |
+| Credential boundary | the agent writes commits, the job pushes; there is no second path to the forge |
+| Untrusted input | issue and PR text is data; prompts label it as such; no shell ever sees it |
+| Output validation | schema-checked outside the agent, capped retries, then hard fail |
+| Eligibility | path denylist and intent tier checked before an agent is spawned |
+| Command authorization | deterministic parse, authorized against the commenter's permission |
 | Stale approval | any new commit clears downstream workflow labels |
-| No inbound surface | outbound HTTPS only; nothing listens, so nothing can be reached |
-| Least privilege | GitHub App installed on selected repos only, minimal declared permissions, short-lived installation tokens |
-| Spend | per-run and per-night budgets enforced by the orchestrator, not the agent |
-| Serial execution | one agent run in flight process-wide; budgets and scratch dirs cannot race |
-| Runaway agents | tree-kill on timeout; bounded fix-loop depth |
+| Config integrity | trigger predicates interpreted, never `eval`ed; `.mesthiri/` is on the denylist |
+| Sign-off | the configured operator certifies; never the bot |
+| Spend | per-run budgets exact; cross-run caps approximate, on the state branch |
 
 ## Non-goals
 
-- Auto-merge, even on green CI (a target project may layer that on itself).
-- A hosted multi-tenant service. (An App is how *you* grant mesthiri access
-  to *your* repos; it is not a product listing.)
-- Replacing the target project's CI, review culture, or triage rubric —
-  mesthiri *consumes* those; it does not define them.
-- **Working on itself.** Retro files improvement proposals as issues on
-  mesthiri, and a human implements them. mesthiri is never configured as a
-  target of its own pipeline: an orchestrator that can modify the code
-  deciding what it is allowed to do has no guardrail left that it cannot
-  reach. The denylist protects targets from mesthiri; this protects
-  mesthiri from itself, and a rule is easier to keep than a denylist is to
-  get exhaustively right.
+- Auto-merge, even on green CI. A project may layer that on itself.
+- A hosted multi-tenant service, a central token mint, or org-wide
+  installation. mesthiri installs per repository, for one operator.
+- Replacing the target project's CI, review culture or triage rubric —
+  mesthiri consumes those; it does not define them.
+- **Working on itself.** Retro files proposals as issues on mesthiri and a
+  human implements them. An orchestrator that can modify the code deciding
+  what it is allowed to do has no guardrail it cannot reach, and a flat rule
+  is easier to keep than a denylist is to get exhaustively right.
+- Matching fullsend's scope. It is years and an organization ahead on
+  multi-forge support, org-scale installation and shared infrastructure.
+  mesthiri's claim is narrower: one repository, one operator, one binary,
+  in Scheme.
 
 ## Open questions
 
 - The agent-backend protocol boundary: pi's RPC schema as-is, or a thin
-  mesthiri-defined envelope so backends are swappable without touching
-  stage code.
-- Forge abstraction: GitHub first; GitLab/Forgejo later via the same
-  REST-client module or a forge protocol. (GitHub App identity is a GitHub
-  concept; the credential-provider seam is where a second forge's auth
-  would attach.)
+  mesthiri envelope so backends swap without touching stage code. Decide
+  when a second backend appears.
+- Whether the scheduled sweeps need a state branch at all, or whether label
+  queries against the forge are a sufficient cursor. The branch is the
+  conservative choice; dropping it would remove the last piece of mesthiri
+  state that is not already in the repository.
+- Forge abstraction: GitHub first. GitLab CI can run the same binary, and
+  fullsend's two-path model — native triggers where they exist, scheduled
+  polling elsewhere — is the shape to copy when it matters.
