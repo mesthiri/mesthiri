@@ -43,6 +43,20 @@ concurrency:
 
 jobs:
   dispatch:
+    # Skip entirely when mesthiri's own comment caused this event. Every
+    # comment it posts fires `issue_comment`, and nothing it writes is ever an
+    # instruction to itself — so without this, each comment costs a run that
+    # downloads the release and then exits.
+    #
+    # Matched on the marker mesthiri stamps on its own comments rather than on
+    # an author name, which would need the App slugs hardcoded here. For any
+    # non-comment event `github.event.comment.body` is absent and `contains`
+    # is false, so this only ever skips comments.
+    #
+    # mesthiri checks this again itself. That is deliberate belt-and-braces:
+    # this condition saves the runner, and the in-binary check still holds for
+    # a repo running an older shim.
+    if: ${{ !contains(github.event.comment.body, '<!-- mesthiri:') }}
     uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml@v0
     secrets:
       reader-key: ${{ secrets.MESTHIRI_READER_KEY }}

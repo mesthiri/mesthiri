@@ -44,6 +44,10 @@
 (check "there is no bare pull_request trigger" #f (contains? shim "\n  pull_request:"))
 (check "no `ref:` is ever supplied" #f (contains? shim "ref:"))
 
+;; A comment mesthiri wrote must not start a run at all.
+(check "the job is skipped for mesthiri's own comments"
+       #t (contains? shim "!contains(github.event.comment.body, '<!-- mesthiri:')"))
+
 ;; The shape the design depends on.
 (check "it calls the reusable workflow" #t (contains? shim "uses: mesthiri/mesthiri/.github/workflows/reusable-dispatch.yml"))
 (check "one hourly schedule tick, not per-stage crons" #t (contains? shim "cron: '7 * * * *'"))
