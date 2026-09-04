@@ -14,7 +14,13 @@ name: release
 
 on:
   push:
-    tags: ['v*']
+    # Version tags only. `v0` is the moving major tag installed repositories
+    # follow through their shim, and it is re-pointed on every rollout — a
+    # bare 'v*' matched it too, so each rollout kicked off a second release
+    # build that spent ten minutes rebuilding everything and then failed
+    # trying to publish a release for a tag that already has one. Two of
+    # those failures are in this repository's history.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
     inputs:
       tag:
