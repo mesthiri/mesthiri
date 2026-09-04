@@ -21,15 +21,24 @@ than building it. See [assets/README.md](assets/README.md) for the marks.
 The design is settled (see [docs/design.md](docs/design.md)) and
 [docs/plan.md](docs/plan.md) sequences the work; M0 through M9 are now
 ticked. That means the modules, dispatch, all six stages, the sandbox, the
-release workflow and `mesthiri install` exist, under 455 assertions across
+release workflow and `mesthiri install` exist, under 466 assertions across
 25 modules.
 
-It does **not** mean this works. One gap outweighs the rest: mesthiri has
-never actually spawned the coding agent. Every stage calls `run-agent`, and
-every test drives it through an injected runner — so the live path (pipes,
-the drive loop, the deadline kill) is unexercised, and that is the piece
-everything else exists to serve. Treat the milestones as scaffolding that
-compiles and is tested, not as a working orchestrator.
+`run-agent` now spawns pi for real, and a test in the suite proves it: a
+live pi process driven over its RPC protocol against a stub model server on
+localhost, covering a run that settles, a model that hangs until the
+deadline kills the process group, and a prompt pi refuses. That test found
+four defects nothing else could — the agent inherited the job's whole
+environment, App keys included; a refused prompt hung until a deadline that
+was accepted as a parameter and never implemented; and the agent's reply was
+read from the wrong shape and the wrong role, so every real run would have
+ended at *settled without producing any text*.
+
+What is still untested is a run against a **real model**, which needs a key
+this repository does not have. The stub proves the protocol and the
+plumbing; it cannot tell you whether a rubric produces good verdicts. Treat
+the milestones as scaffolding that is tested end to end and has never done
+the actual job.
 
 The project's subprocess needs drove
 [KEP-0022](https://github.com/kaappi/keps/blob/main/keps/0022-subprocess-support.md)
@@ -53,11 +62,11 @@ capability in production today, look at fullsend first.
 
 [docs/guide.md](docs/guide.md) shows the intended end-user experience —
 install, configure, first triage, what a mesthiri pull request looks like.
-It was written ahead of the code as a design tool, and the code has now
-caught up to most of it — but until an agent has actually run, treat it as
-a design preview rather than instructions. The tests check the guide's
-sample configuration against mesthiri's own reader, so at least the parts
-you would copy are real.
+It was written ahead of the code as a design tool and the code has now
+caught up to it — but until mesthiri has triaged a real issue with a real
+model, treat it as a design preview rather than instructions. The tests
+parse the guide's sample configuration with mesthiri's own reader and
+validate its triggers, so the parts you would copy are at least real.
 
 ## The pipeline
 

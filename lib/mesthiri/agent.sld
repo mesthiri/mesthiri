@@ -21,7 +21,10 @@
 
 (define-library (mesthiri agent)
   (import (scheme base) (scheme write) (scheme file) (scheme char)
-          (kaappi process) (kaappi json)
+          (scheme process-context)
+          (kaappi process) (kaappi json) (kaappi fibers)
+          (only (srfi 18) thread-sleep!)
+          (mesthiri proc)
           (mesthiri config) (mesthiri harness) (mesthiri sandbox) (mesthiri log))
   (export agent-argv untrusted-block frame-type frame-usage
           terminal-frame? run-record make-run-record
@@ -30,7 +33,8 @@
           fold-frames budget-exceeded?
           validate-output output-error? output-error-message
           run-agent write-trace agent-final-text
-          run-record-text)
+          run-record-text agent-env write-agent-home!
+          frame-refusal stderr-tail)
   (begin
 
     ;; --- spawn arguments ---------------------------------------------------
@@ -127,12 +131,49 @@
           (raise (make-output-error
                   "the agent settled without producing any text"))))
 
-    ;; The text of a frame's message, or #f. Threaded through the folds.
+    ;; The text of an ASSISTANT message, or #f. Threaded through the folds.
+    ;;
+    ;; Two things here were wrong until a live run showed them, and both fail
+    ;; quietly rather than loudly.
+    ;;
+    ;; `content` is an array of blocks — [{"type":"text","text":"…"}] — not a
+    ;; string. docs/pi-rpc.md abbreviates it to a string in its fixture, so
+    ;; the fixture-driven tests passed while every real run would have ended
+    ;; at "the agent settled without producing any text".
+    ;;
+    ;; And the role matters: `message_end` fires for the user's message too,
+    ;; carrying the prompt. Without the role check the "agent's answer" is
+    ;; whichever message came last — which, for a run that produces no reply,
+    ;; is the prompt handed back as though the agent had said it.
     (define (frame-text f)
       (let ((m (assoc "message" f)))
         (and m (pair? (cdr m))
-             (let ((c (assoc "content" (cdr m))))
-               (and c (string? (cdr c)) (> (string-length (cdr c)) 0) (cdr c))))))
+             (let ((role (assoc "role" (cdr m))))
+               (and role (equal? (cdr role) "assistant")
+                    (let ((c (assoc "content" (cdr m))))
+                      (and c (content-text (cdr c)))))))))
+
+    ;; `json-read-string` gives a JSON array as a LIST and a JSON object as an
+    ;; alist, so `(list? x)` is true of both and cannot tell them apart. What
+    ;; distinguishes a block list is that its elements are themselves pairs of
+    ;; pairs; anything else is left alone rather than guessed at.
+    (define (content-text v)
+      (cond
+       ((string? v) (and (> (string-length v) 0) v))
+       ((and (pair? v) (list? v))
+        (let loop ((bs v) (acc ""))
+          (if (null? bs)
+              (and (> (string-length acc) 0) acc)
+              (let* ((b (car bs))
+                     (block? (and (pair? b) (pair? (car b))))
+                     (ty (and block? (assoc "type" b)))
+                     (tx (and block? (assoc "text" b))))
+                (loop (cdr bs)
+                      (if (and ty (equal? (cdr ty) "text")
+                               tx (string? (cdr tx)))
+                          (string-append acc (cdr tx))
+                          acc))))))
+       (else #f)))
 
     (define (frame-model f)
       (let ((m (assoc "message" f)))
@@ -183,20 +224,78 @@
         ((list)    (list? v))
         (else #t)))
 
+    ;; --- the child's environment -------------------------------------------
+    ;;
+    ;; `env:` REPLACES the environment rather than adding to it, and that is
+    ;; the whole reason to pass it. Without it the agent inherits the CI job's
+    ;; environment — which holds both App private keys and the forge token —
+    ;; so "the agent never holds a credential" would have been false in the
+    ;; one place it matters, and quietly so, because nothing would fail.
+    ;;
+    ;; Replacing it means everything the child needs must be listed. PATH and
+    ;; HOME are not optional: pi is a node program that resolves its own
+    ;; interpreter through PATH, and reads its provider catalogue under HOME.
+    (define (agent-env provider secret-value home)
+      (append
+       (list (cons "PATH" (or (get-environment-variable "PATH") "/usr/bin:/bin"))
+             (cons "HOME" home)
+             (cons "PI_OFFLINE" "1")
+             ;; A terminal escape in a model's reply would otherwise land in
+             ;; the trace and in whatever reads it.
+             (cons "NO_COLOR" "1")
+             (cons "TERM" "dumb"))
+       (if (and provider secret-value)
+           (list (cons (symbol->string (provider-key-env provider)) secret-value))
+           '())))
+
+    ;; pi discovers custom providers from `$HOME/.pi/agent/models.json`, and
+    ;; reads `$VAR` in `apiKey` from its own environment — so the key reaches
+    ;; the model without passing through this file, and without appearing in
+    ;; argv where `ps` would show it.
+    ;;
+    ;; HOME is inside the run's scratch directory, so this is also what stops
+    ;; the agent seeing an operator's real pi configuration: extensions,
+    ;; sessions and logins from an interactive install are simply not there.
+    (define (write-agent-home! home models-json)
+      (proc-run (list "mkdir" "-p" (string-append home "/.pi/agent")))
+      (call-with-output-file (string-append home "/.pi/agent/models.json")
+        (lambda (p) (write-string models-json p)))
+      home)
+
     ;; --- driving the agent --------------------------------------------------
     ;;
     ;; `spawn-process` with pipes, a drive loop over newline-delimited JSON,
-    ;; and a wall-clock deadline enforced by killing the process GROUP —
-    ;; pi has no in-band cancel, and the agent's own subprocesses must die
-    ;; with it.
-    (define (run-agent argv prompt deadline-secs budget trace-path)
-      (let-values (((proc) (spawn-process argv
-                                          'stdin: 'pipe
-                                          'stdout: 'pipe
-                                          'stderr: 'null
-                                          'new-group: #t)))
+    ;; and a wall-clock deadline enforced by killing the process GROUP — pi
+    ;; has no in-band cancel, and the agent's own subprocesses must die with
+    ;; it.
+    ;;
+    ;; The deadline is a fiber, and it has to be a fiber rather than a SRFI-18
+    ;; thread. A process object is owned by the heap that created it, and
+    ;; `process-kill` from another thread raises rather than killing: a
+    ;; watchdog thread reports that it fired, kills nothing, and the run hangs
+    ;; anyway. Fibers share the heap, so the kill is allowed — and a blocking
+    ;; `read-line` in the main fiber parks rather than stalling the scheduler,
+    ;; which is what makes the watchdog run at all. Both halves were checked
+    ;; against a real process before this was written.
+    (define (run-agent argv prompt deadline-secs budget trace-path env stderr-path)
+      (let* ((errp (and stderr-path (open-output-file stderr-path)))
+             (proc (apply spawn-process
+                          argv
+                          'stdin: 'pipe
+                          'stdout: 'pipe
+                          'stderr: (if errp errp 'null)
+                          'new-group: #t
+                          (if env (list 'env: env) '()))))
         (let ((in  (process-stdin proc))
-              (out (process-stdout proc)))
+              (out (process-stdout proc))
+              (timed-out (list #f)))
+          ;; Fires once. If the run settles first the fiber is still asleep at
+          ;; exit, which costs nothing: the runtime does not wait for it.
+          (if (and deadline-secs (> deadline-secs 0))
+              (spawn (lambda ()
+                       (thread-sleep! deadline-secs)
+                       (set-car! timed-out #t)
+                       (guard (e (#t #f)) (process-kill proc 'group: #t)))))
           (write-string (json-write-string
                          (list (cons "type" "prompt")
                                (cons "message" prompt))) in)
@@ -206,9 +305,16 @@
             (let ((line (read-line out)))
               (cond
                ((eof-object? line)
-                (finish proc frames turns tokens model text 'eof trace-path))
+                ;; Two very different situations arrive here identically: the
+                ;; deadline killed it, or it died on its own. The flag is what
+                ;; tells them apart, and the difference is the whole content
+                ;; of the message a maintainer will read.
+                (finish proc errp frames turns tokens model text
+                        (if (car timed-out) 'deadline 'eof)
+                        trace-path stderr-path))
                (else
                 (let* ((fr (guard (e (#t #f)) (json-read-string line)))
+                       (refusal (and fr (frame-refusal fr)))
                        (frames (if fr (cons fr frames) frames))
                        (turns (if (and fr (equal? (frame-type fr) "turn_start"))
                                   (+ turns 1) turns))
@@ -217,17 +323,63 @@
                        (text (or (and fr (frame-text fr)) text))
                        (model (or model (and fr (frame-model fr)))))
                   (cond
+                   ;; pi answers a command it cannot run with a `response`
+                   ;; frame and then goes on waiting for another one. It never
+                   ;; emits `agent_settled`, so a loop that waits only for
+                   ;; that terminal frame hangs until the deadline and then
+                   ;; reports a timeout — while the first second of output
+                   ;; said exactly what was wrong. Observed with an
+                   ;; unconfigured provider: "No API key found for deepseek".
+                   (refusal
+                    (process-kill proc 'group: #t)
+                    (let ((rec (finish proc errp frames turns tokens model
+                                       refusal 'refused trace-path stderr-path)))
+                      rec))
                    ((budget-exceeded? budget turns tokens)
                     (process-kill proc 'group: #t)
-                    (finish proc frames turns tokens model text 'over-budget trace-path))
+                    (finish proc errp frames turns tokens model text
+                            'over-budget trace-path stderr-path))
                    ((and fr (terminal-frame? fr))
-                    (finish proc frames turns tokens model text 'settled trace-path))
+                    (finish proc errp frames turns tokens model text
+                            'settled trace-path stderr-path))
                    (else (loop frames turns tokens model text)))))))))))
 
-    (define (finish proc frames turns tokens model text outcome trace-path)
+    ;; pi reports a command it will not run as
+    ;;   {"type":"response","command":"prompt","success":false,"error":"…"}
+    ;; and carries on. Returns pi's own words, which are better than any
+    ;; summary of them, or #f when the frame is not a refusal.
+    (define (frame-refusal f)
+      (and (equal? (frame-type f) "response")
+           (let ((s (assoc "success" f)))
+             (and s (eq? (cdr s) #f)
+                  (let ((e (assoc "error" f)))
+                    (if (and e (string? (cdr e)))
+                        (cdr e)
+                        "pi refused the command without saying why"))))))
+
+    (define (finish proc errp frames turns tokens model text outcome
+                    trace-path stderr-path)
       (guard (e (#t #f)) (process-kill proc 'group: #t))
+      ;; Reap it. Without this the child is a zombie for the life of the job,
+      ;; and on a self-hosted runner that is a leak rather than a curiosity.
+      (guard (e (#t #f)) (process-wait proc))
+      (if errp (guard (e (#t #f)) (close-output-port errp)))
       (if trace-path (write-trace trace-path (reverse frames)))
       (make-run-record outcome turns tokens model (length frames) text))
+
+    ;; What the agent said on stderr, for the failure message. pi is quiet
+    ;; when it works, so anything here is worth reading — and an outcome of
+    ;; `eof` with nothing on stdout is otherwise undiagnosable.
+    (define (stderr-tail path limit)
+      (if (not (and path (file-exists? path)))
+          ""
+          (call-with-input-file path
+            (lambda (p)
+              (let loop ((acc ""))
+                (let ((c (read-char p)))
+                  (cond ((eof-object? c) acc)
+                        ((>= (string-length acc) limit) acc)
+                        (else (loop (string-append acc (string c)))))))))))
 
     ;; The trace is the run record plus the per-turn detail retro reads. It is
     ;; a CI artifact rather than a database row, and retention is CI's.

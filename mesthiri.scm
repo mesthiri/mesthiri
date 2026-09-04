@@ -218,27 +218,59 @@
            (enc (let ((x (assoc "content" r))) (and x (cdr x)))))
       (values enc sha))))
 
-(define (agent-runner harness provider-name model workdir trace)
+(define (agent-runner config harness provider-name model workdir trace)
   (lambda (prompt)
-    (let* ((argv (agent-argv harness provider-name model workdir))
+    (let* ((provider (config-provider config provider-name))
+           ;; HOME goes inside the run's scratch directory. That is where pi
+           ;; finds the provider catalogue mesthiri writes for it — and it is
+           ;; also what stops the agent seeing an operator's real pi
+           ;; configuration, since extensions, logins and sessions from an
+           ;; interactive install are simply not there.
+           (home (string-append workdir "/.agent-home"))
+           (stderr-path (string-append workdir "/agent-stderr.log"))
+           (argv (agent-argv harness provider-name model workdir))
            (wrapped (or (sandbox-wrap argv workdir
                                       (string-append workdir "/secrets"))
                         argv)))
       (if (not (sandbox-available?))
           (log-warn "no namespace sandbox on this host: the agent is UNCONTAINED"))
-      (let ((rec (run-agent wrapped prompt 1200
-                            (list (cons 'tokens (harness-budget harness 'tokens))
-                                  (cons 'turns  (harness-budget harness 'turns)))
-                            trace)))
+      (write-agent-home! home (render-models-json
+                               config (list (cons provider-name model))))
+      ;; The one secret the agent can see, because it cannot call a model
+      ;; without it. Everything else the job holds — both App keys and the
+      ;; forge token — is left behind by `agent-env`, which builds the
+      ;; child's environment rather than passing the job's along.
+      (let* ((secret (and provider
+                          (env (symbol->string (provider-secret provider)))))
+             (rec (run-agent wrapped prompt 1200
+                             (list (cons 'tokens (harness-budget harness 'tokens))
+                                   (cons 'turns  (harness-budget harness 'turns)))
+                             trace
+                             (agent-env provider secret home)
+                             stderr-path)))
         (log-info "agent " (run-record-outcome rec)
                   " turns=" (run-record-turns rec)
                   " tokens=" (run-record-tokens rec)
                   " model=" (or (run-record-model rec) "-"))
         (if (not (eq? (run-record-outcome rec) 'settled))
-            (die "agent run did not settle: " (run-record-outcome rec)))
+            (die "agent run did not settle: " (run-record-outcome rec)
+                 (agent-failure-detail rec stderr-path)))
         ;; The agent's reply is the last assistant message; parsed and then
         ;; validated by triage against its schema.
         (json-read-string (agent-final-text rec))))))
+
+;; Why a run ended, in the terms a maintainer can act on. An outcome alone
+;; sends someone to the workflow log; `refused` carries pi's own sentence,
+;; and anything else is worth checking stderr for, because pi is quiet when
+;; it works.
+(define (agent-failure-detail rec stderr-path)
+  (case (run-record-outcome rec)
+    ((refused) (string-append " — pi refused it: " (or (run-record-text rec) "")))
+    ((deadline) " — the wall-clock deadline killed it; the model may be hanging")
+    (else (let ((tail (stderr-tail stderr-path 400)))
+            (if (> (string-length tail) 0)
+                (string-append " — stderr: " tail)
+                " — nothing on stderr; check the provider and model names")))))
 
 (define (prioritize-handler forge config event)
   (let* ((repo (event-repo event))
@@ -309,7 +341,7 @@
     (git-branch workdir (branch-name-for number))
     (let* ((title (let ((t (assoc "title" issue))) (and t (cdr t))))
            (body  (let ((b (assoc "body" issue))) (and b (cdr b))))
-           (run (agent-runner hn pname model workdir trace))
+           (run (agent-runner config hn pname model workdir trace))
            (result (guard (e (#t (list (cons "summary" "the agent run failed")
                                        (cons "tests_pass" #f))))
                      (run (code-prompt title body (config-test-command config)))))
@@ -388,7 +420,7 @@
              (model (harness-model hn))
              (workdir (or (env "RUNNER_TEMP") "/tmp"))
              (diff (forge-request-diff forge repo number))
-             (run (agent-runner hn pname model workdir #f)))
+             (run (agent-runner config hn pname model workdir #f)))
         (for-each
          (lambda (dim)
            (guard (e (#t (log-warn "review pass " dim " failed; continuing")))
@@ -489,7 +521,7 @@
       (let ((issue (forge-get forge (string-append "/repos/" repo "/issues/"
                                                    (number->string (event-number event))))))
         (triage-issue forge config repo issue rubric sha mode
-                      (agent-runner hn pname model workdir trace))))))
+                      (agent-runner config hn pname model workdir trace))))))
 
 (define (cmd-dispatch args)
   (let ((ev (load-event)))

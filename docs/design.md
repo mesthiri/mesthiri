@@ -364,6 +364,17 @@ token, which do grant repository access, stay outside the mount namespace
 where the agent cannot reach them at all. If a second credential ever seems
 to belong inside, that is the moment to re-read this paragraph.
 
+The mount namespace is not what enforces this, and assuming it did was a
+real hole. A child process inherits its parent's **environment** regardless
+of what is mounted, and the job's environment holds both App keys and the
+forge token — so for as long as `agent.sld` spawned pi without saying
+otherwise, every one of them was readable inside the sandbox, and nothing
+failed to indicate it. The agent's environment is therefore **constructed
+rather than inherited**: `PATH`, `HOME`, a couple of display settings, and
+the one model key. Everything else is absent, not merely unreadable. This is
+the same discipline as the file layout, applied to the channel the file
+layout does not cover.
+
 **The agent writes; the job pushes.** The agent produces commits in its
 clone and exits. The job, outside the sandbox, reads the finished diff,
 checks it against the eligibility rules, and only then pushes and opens the

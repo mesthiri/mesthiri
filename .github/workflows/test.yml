@@ -21,6 +21,11 @@ concurrency:
 
 env:
   KAAPPI_VERSION: v0.26.1
+  # The agent mesthiri drives. Pinned to the version docs/pi-rpc.md was
+  # recorded against, and to the version .mesthiri/config.scm scaffolds:
+  # tests/test-agent-live.scm asserts protocol details, so a floating
+  # version would turn a pi release into a mystery failure here.
+  PI_VERSION: 0.84.4
 
 jobs:
   suite:
@@ -46,6 +51,15 @@ jobs:
       # jwt tests are the ones that would fail confusingly without it.
       - name: Check openssl is present
         run: openssl version
+
+      # Without pi, tests/test-agent-live.scm skips — and that test is the
+      # only one that proves run-agent spawns anything at all. It talks to a
+      # stub model server on localhost, so no API key and no egress.
+      - name: Install pi
+        run: |
+          set -euo pipefail
+          npm i -g "@earendil-works/pi-coding-agent@${PI_VERSION}"
+          pi --version
 
       - run: ./tests/run-all.sh
         env:

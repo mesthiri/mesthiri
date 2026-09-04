@@ -18,10 +18,13 @@ experience,
 written ahead of the code as a design tool — when it disagrees with
 reality, change the guide first and ask whether the design or the wording
 was wrong; `README.md` is the public face. Keep all six in sync with
-reality. M1 and M2 have landed (`lib/mesthiri/*.sld`, 183 tests): dispatch,
-the shim and commands work, but no stage does. The README and the guide must
-keep saying so until a stage lands, because a reader who tries the guide
-today gets a command that is parsed and authorized and then does nothing.
+reality. M0-M9 have landed (`lib/mesthiri/*.sld`, 466 assertions), and
+`run-agent` really does spawn pi — `tests/test-agent-live.scm` drives a live
+process against a stub model server. What has **never** happened is a run
+against a real model, or against a real repository: no key, no adopter. The
+README and the guide must keep saying so, because a reader who takes the
+guide at face value expects verdicts that no one has yet seen mesthiri
+produce.
 
 `AGENTS.md` is a symlink to this file, so tools looking for either name get
 the same instructions. Edit this file, not the link. Note that an
@@ -60,7 +63,11 @@ symlink and would overwrite everything here.
   path to the API.
 - `agent.sld` is also the only place that builds the sandbox: the agent
   never holds a credential and never reaches the forge. It writes commits;
-  the job pushes.
+  the job pushes. Containment covers the **environment** as well as the
+  filesystem — the agent's environment is constructed by `agent-env`, never
+  inherited, because a child inherits every variable the job holds
+  (both App keys, the forge token) no matter what is mounted, and nothing
+  fails to indicate it. Adding a variable there is a security decision.
 - Shim workflows use `pull_request_target` and never check out the PR's
   code. This is the control that stops a pull request rewriting the
   workflow that holds the secrets — treat it as non-negotiable.

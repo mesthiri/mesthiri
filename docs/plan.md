@@ -205,6 +205,26 @@ instead, and M4 replaces the handler rather than deleting a special case.
       stderr, `new-group: #t`; JSON framing from a drive fiber against M0's
       captured schema; wall-clock deadline via `process-wait 'timeout:` then
       `process-kill 'group: #t`; token and turn budgets passed to pi.
+
+      **The live path is now covered** by `tests/test-agent-live.scm`: a real
+      pi process, driven over its RPC protocol against a stub model server on
+      localhost, for a run that settles, a model that hangs until the
+      deadline kills the process group, and a prompt pi refuses. CI installs
+      the pinned pi so it runs on every push rather than skipping.
+
+      Writing it found four defects that nine milestones of fixture-driven
+      tests could not, all of them silent: the agent inherited the job's
+      whole environment (App keys and forge token included) because nothing
+      passed `env:`; a refused prompt hung, since pi answers `success:false`
+      and then waits forever while the loop watched only for `agent_settled`,
+      against a deadline that was accepted as a parameter and never
+      implemented; and the reply was read as a string from any role, where it
+      is a list of content blocks on the assistant's message — so every real
+      run would have ended at "settled without producing any text".
+
+      The deadline has to be a **fiber**, not a SRFI-18 thread: a process is
+      owned by the heap that created it, so `process-kill` from a thread
+      raises and the watchdog reports firing while killing nothing.
 - [x] **Containment inside the runner**: namespace sandbox via
       `bwrap`/`unshare` constructed by `agent.sld` and nothing else —
       read-only root, scratch clone the only writable mount, the App key and

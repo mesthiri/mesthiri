@@ -4,6 +4,11 @@ Status: recorded 2026-09-04 against **pi 0.84.4**, by driving it and reading
 what came back. This is M0's recon, and `lib/mesthiri/agent.sld` (M3) is
 written against this rather than against an assumption.
 
+**Revised 2026-09-04**, after `run-agent` spawned pi for the first time.
+Recon by probing found the frame *names*; driving a run to completion found
+the frame *shapes*, and three of them were wrong here. Where a section was
+corrected it says so.
+
 Everything here was captured from a live process. Where a claim is inferred
 rather than observed, it says so.
 
@@ -54,6 +59,22 @@ Acknowledgement of a command:
 {"type":"response","command":"prompt","success":true}
 ```
 
+**And its failure form, which matters more.** A command pi will not run is
+answered with:
+
+```json
+{"type":"response","command":"prompt","success":false,
+ "error":"No API key found for deepseek.\n\nUse /login to log into a provider…"}
+```
+
+pi then **keeps running and waits for another command**. It never emits
+`agent_settled`, so a drive loop that waits only for the terminal frame hangs
+until its deadline and reports a timeout — while the first quarter-second of
+output said exactly what was wrong. `run-agent` treats `success:false` as
+terminal and carries pi's own sentence out, because pi's wording is better
+than any summary of it. Observed 2026-09-04 against a provider with no key
+configured.
+
 Then one run's lifecycle, in order:
 
 | Frame | Carries | Why mesthiri cares |
@@ -89,6 +110,24 @@ budget check reads the latest rather than summing.
 needs, and taking it from here rather than from config means the trailer
 records what actually ran.
 
+### `message.content` is a list of blocks, not a string
+
+```json
+{"type":"turn_end","message":{"role":"assistant","model":"…",
+ "content":[{"type":"text","text":"the reply"}]}}
+```
+
+The fixture below abbreviates `content` to a string, and `agent.sld` read it
+that way until a live run: the agent's reply was never found, and every real
+run would have ended at *the agent settled without producing any text* —
+with the fixture-driven tests passing throughout. A sample that simplifies
+the shape it is standing in for is worse than no sample.
+
+`role` matters as much. `message_start` and `message_end` fire for the
+**user's** message too, carrying the prompt. Taking "the last message's text"
+without checking the role hands back the prompt as though the agent had said
+it.
+
 ### Noise to ignore
 
 ```json
@@ -107,6 +146,14 @@ Observed needs, to be confirmed once the sandbox is built:
 - **Network**: the model provider's endpoint. With `--no-tools` nothing else
   was contacted. `--offline` suppresses startup network operations and is
   worth setting, since mesthiri pins its own versions.
+- **`$HOME`**: pi reads its provider catalogue from
+  `$HOME/.pi/agent/models.json` — `{"providers":{"<name>":{"baseUrl","api",
+  "apiKey":"$VAR","models":[{"id":…}]}}}`, which is exactly the shape
+  `render-models-json` emits. `apiKey` is expanded from pi's own environment,
+  so the key never passes through mesthiri's argv. mesthiri points HOME at
+  the run's scratch directory, which also keeps an operator's real pi
+  configuration — extensions, logins, sessions — out of the run. Verified by
+  declaring a provider and listing it back.
 - **Filesystem**: session storage under the session directory unless
   `--no-session` is passed. mesthiri passes `--no-session`: a run's record is
   the JSONL trace, and a session file in the scratch clone would end up in a
