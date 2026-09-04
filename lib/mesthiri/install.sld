@@ -87,7 +87,9 @@
        "    (prioritize (on (schedule \"08:00\"))       (mode off))\n"
        "    (code       (on (or (label \"ready-to-implement\") (command \"/implement\")))\n"
        "                (mode off) (max-tier 0))\n"
-       "    (review     (on (pull-request-updated))  (mode off))\n"
+       "    (review     (on (or (pull-request-opened)\n"
+       "                      (pull-request-updated)\n"
+       "                      (command \"/review\"))) (mode off))\n"
        "    (fix        (on (command \"/fix\"))        (mode off))\n"
        "    (retro      (on (schedule \"sunday 06:00\")) (mode off))))\n"))
 

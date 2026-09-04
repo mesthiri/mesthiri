@@ -1,5 +1,5 @@
 (import (scheme base) (scheme write) (mesthiri install) (mesthiri config) (mesthiri harness)
-        (mesthiri proc) (mesthiri trigger) (scheme file))
+        (mesthiri proc) (mesthiri trigger) (mesthiri event) (scheme file))
 (define pass 0) (define fail 0)
 (define (check name expected actual)
   (if (equal? expected actual)
@@ -50,6 +50,22 @@
 ;; it. A predicate that is not in the vocabulary parses as a list and is
 ;; refused at run time, so the scaffold would install and then refuse itself.
 ;; This is how `findings-posted` was caught in the guide's sample.
+
+;; `pull-request-updated` matches only the `synchronize` action — a push to
+;; an existing branch. A review stage triggered on that alone never fires
+;; when a pull request is OPENED, which is the moment a reviewer is most
+;; wanted, and the name does not warn you: "updated" reads as "changed in
+;; any way, opening included". The scaffold shipped exactly that, so every
+;; adopter who turned review on would have got a reviewer that ignored new
+;; pull requests. Caught by running the chain on the sandbox, where a live
+;; review stage logged `no stage trigger matched this event` on a freshly
+;; opened pull request.
+(define (opened-pr)
+  (make-event 'pull-request-opened "o/r" "alice" 1 '() #f "" 1 #f #f #t))
+
+(check "the scaffolded review trigger fires on an OPENED pull request"
+       #t (trigger-match? (stage-trigger (config-stage cfg 'review)) (opened-pr)))
+
 (check "every scaffolded trigger validates"
        #t (let loop ((s '(triage prioritize code review fix retro)))
             (cond ((null? s) #t)

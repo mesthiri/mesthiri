@@ -58,7 +58,9 @@ code and a fork carries a copy. It is s-expressions, read as data.
     (code       (on (or (label "ready-to-implement")
                         (command "/implement")))   (mode off)
                 (max-tier 0))                      ; raise to 1 when ready
-    (review     (on (pull-request-updated))        (mode off))
+    (review     (on (or (pull-request-opened)
+                        (pull-request-updated)
+                        (command "/review")))     (mode off))
                 ;; only PRs mesthiri opened — built into dispatch, not a predicate
     (fix        (on (command "/fix"))              (mode off))
     (retro      (on (schedule "sunday 06:00"))     (mode off))))
