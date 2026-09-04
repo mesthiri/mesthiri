@@ -102,6 +102,25 @@ Then delete the .pem files. They are not needed again, and GitHub will
 not show them to you a second time either.
 ```
 
+Two things worth knowing about that.
+
+**Anyone with write access to this repository can obtain these secrets.**
+That is true of every Actions secret — masking stops them appearing in a log
+by accident, not someone deliberately exfiltrating them. It is acceptable
+here because neither App grants more on *this* repository than a write-access
+maintainer already has. It stops being acceptable if you install the same
+pair of Apps on several repositories and store the keys in each: a
+maintainer of the least-guarded one can then act on all of them. Sharing a
+pair across repositories with the same maintainers is fine; sharing across
+trust boundaries is a privilege escalation. Register separate Apps for
+those.
+
+**The model key is the one secret the agent itself can see**, because it
+cannot call a model without it. Everything else stays in the job, outside
+the sandbox. Budget it accordingly — a prompt-injected agent could spend it,
+which is why per-run token caps exist, and it is also why that key should
+not be one that unlocks anything else you own.
+
 ### Install
 
 ```bash

@@ -186,6 +186,39 @@ on stdin, key as a file path, never on argv. There is deliberately no
 central token-mint service — fullsend needs one because it serves many
 organizations; a single operator does not.
 
+### Where the keys actually live
+
+Three secrets, all GitHub Actions repository secrets: the two App private
+keys and the model backend's API key. Three consequences follow, and each is
+easy to get wrong by improvising.
+
+**The PEM has to touch disk.** `openssl dgst -sha256 -sign` takes the key as
+a *file path*: stdin is already carrying the data being signed, and
+KEP-0022 shipped without `pass-fds:`, so there is no descriptor to hand it
+either. So the key is written to a file under the runner's temp directory at
+mode 0600, signed with, and unlinked immediately — never into the workspace,
+which gets cloned, archived and uploaded, and never anywhere the sandbox
+mounts. The window is one `openssl` invocation long, and it is not zero;
+saying so is better than implying the key never lands.
+
+**The installation token must be masked explicitly.** Actions masks
+*registered* secrets in logs. A token minted at runtime is not one, so
+nothing hides it automatically — and on a public repository the run log is
+public. mesthiri emits `::add-mask::` for the token the moment it has one,
+and treats logging it deliberately as a bug rather than a style problem.
+
+**An App's installation set is its blast radius.** Anyone with write access
+to a repository can obtain that repository's secrets — push a branch with a
+workflow that uses them, and masking stops accidents, not intent. That is
+tolerable here precisely because neither App grants more on the repository
+than a write-access maintainer already has. It stops being tolerable the
+moment one App is installed on *several* repositories with its key stored in
+each: a maintainer of the least-guarded repo can then mint tokens for all of
+them. Sharing a pair of Apps across repos is fine when those repos share a
+trust boundary — one organization, one set of maintainers, which is the
+common case — and is a privilege escalation when they do not. Register
+separate Apps whenever the maintainer sets differ.
+
 ## Agent execution and containment
 
 The CI runner is already an ephemeral, isolated VM, which is most of the
