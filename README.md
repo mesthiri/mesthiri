@@ -59,15 +59,7 @@ You will not need Kaappi to *use* it. A release is three files — the binary
 plus the two C-FFI shared objects it links against — which the reusable
 workflow downloads and checksums for you.
 
-### Inspired by fullsend
-
-The CI-native execution model here is learned from
-[fullsend](https://fullsend.sh) — an Apache-2.0 Go project pursuing the same
-goal at far larger scale, with multi-forge support, org-wide installation
-and shared infrastructure mesthiri does not attempt. mesthiri is an
-independent implementation in Kaappi Scheme rather than a port: no fullsend
-code, schema or prose is copied, and mesthiri stays MIT. If you want this
-capability in production today, look at fullsend first.
+This project is inspired by [fullsend](https://fullsend.sh).
 
 [The guide](docs/guide/), published at [mesthiri.org](https://mesthiri.org/),
 shows the intended end-user experience —
